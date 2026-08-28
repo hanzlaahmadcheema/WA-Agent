@@ -130,3 +130,12 @@ CREATE TABLE IF NOT EXISTS job_outputs (
     created_at       INTEGER NOT NULL,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
+
+-- 7. PROCESSED INBOUND MESSAGES (Deduplication)
+CREATE TABLE IF NOT EXISTS processed_messages (
+    message_id       TEXT PRIMARY KEY,                  -- WhatsApp msg.key.id
+    sender_jid       TEXT NOT NULL,                     -- Remote JID
+    processed_at     INTEGER NOT NULL                   -- Epoch ms
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_messages_at ON processed_messages(processed_at);

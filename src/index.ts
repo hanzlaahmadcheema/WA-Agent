@@ -1,6 +1,6 @@
 import { config } from './config.js';
 import { initDatabase, closeDatabase } from './database/connection.js';
-import { startWhatsAppClient } from './whatsapp/client.js';
+import { startWhatsAppClient, stopWhatsAppClient } from './whatsapp/client.js';
 
 async function bootstrap() {
   console.log('═══════════════════════════════════════════════════════════════');
@@ -17,8 +17,9 @@ async function bootstrap() {
   console.log('[Init] Starting WhatsApp connection...');
   await startWhatsAppClient();
 
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log('\n[Shutdown] Gracefully shutting down daemon...');
+    await stopWhatsAppClient();
     closeDatabase();
     process.exit(0);
   };
