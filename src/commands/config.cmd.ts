@@ -1,0 +1,251 @@
+import type { CommandContext } from './types.js';
+import {
+  getOrCreateProjectConfig,
+  updateProjectConfig,
+} from '../database/repositories/config.repo.js';
+import { InvalidArgumentError } from '../router/errors.js';
+
+export async function handleConfig(ctx: CommandContext): Promise<string> {
+  const { subcommand, args } = ctx.parsed;
+
+  if (!subcommand) {
+    return handleConfigShow(ctx);
+  }
+
+  switch (subcommand) {
+    case 'show':
+      return handleConfigShow(ctx);
+    case 'model':
+      return handleConfigModel(ctx, args[0]);
+    case 'permission':
+      return handleConfigPermission(ctx, args[0]);
+    case 'tools':
+      return handleConfigTools(ctx, args[0], args.slice(1));
+    case 'output':
+      return handleConfigOutput(ctx, args[0]);
+    case 'turns':
+      return handleConfigTurns(ctx, args[0]);
+    case 'budget':
+      return handleConfigBudget(ctx, args[0]);
+    case 'worktree':
+      return handleConfigWorktree(ctx, args[0]);
+    case 'mcp':
+      return handleConfigMcp(ctx, args[0]);
+    case 'render':
+      return handleConfigRender(ctx, args[0]);
+    default:
+      throw new InvalidArgumentError(
+        `Unknown config setting: "${subcommand}"`,
+        'Use /config to view current configuration.'
+      );
+  }
+}
+
+export function handleConfigShow(ctx: CommandContext): string {
+  const cfg = getOrCreateProjectConfig(ctx.project.id);
+  const budgetStr = cfg.max_budget_usd !== null ? `$${cfg.max_budget_usd.toFixed(2)}` : 'unlimited';
+  const worktreeStr = cfg.worktree_enabled ? `enabled (${cfg.worktree_branch || 'auto'})` : 'disabled';
+  const mcpStr = cfg.mcp_config_path || 'default';
+
+  return [
+    '⚙️ *Execution & Display Configuration*',
+    '',
+    '*Agent Execution (CLI)*:',
+    `• Model:        \`${cfg.model}\``,
+    `• Permission:   \`${cfg.permission_mode}\``,
+    `• Output:       \`${cfg.agent_output_format}\` (CLI flag)`,
+    `• Max Turns:    ${cfg.max_turns}`,
+    `• Budget Cap:   ${budgetStr}`,
+    `• Worktree:     ${worktreeStr}`,
+    `• MCP Config:   ${mcpStr}`,
+    '',
+    '*WhatsApp Presentation*:',
+    `• Render:       \`${cfg.render_mode}\``,
+    `• Preview Tail: ${cfg.render_max_excerpt_lines} lines`,
+    `• Show Diffs:   ${cfg.render_show_diff ? 'Yes' : 'No'}`,
+    '',
+    '_Modify with `/model <name>`, `/turns <n>`, `/render <mode>`._',
+  ].join('\n');
+}
+
+export function handleConfigModel(ctx: CommandContext, modelName?: string): string {
+  if (!modelName) {
+    throw new InvalidArgumentError('Model name required.', 'Usage: /model <sonnet | opus | haiku>');
+  }
+
+  const normalized = modelName.toLowerCase();
+  const mapping: Record<string, string> = {
+    sonnet: 'claude-3-7-sonnet',
+    opus: 'claude-3-opus',
+    haiku: 'claude-3-5-haiku',
+  };
+
+  const finalModel = mapping[normalized] || modelName;
+  updateProjectConfig(ctx.project.id, { model: finalModel });
+
+  return `✅ Execution model set to: \`${finalModel}\``;
+}
+
+export function handleConfigPermission(ctx: CommandContext, mode?: string): string {
+  if (!mode || !['plan', 'default', 'accept-all', 'bypass'].includes(mode.toLowerCase())) {
+    throw new InvalidArgumentError(
+      'Invalid permission mode.',
+      'Valid choices: plan, default, accept-all, bypass.'
+    );
+  }
+
+  const validMode = mode.toLowerCase() as 'plan' | 'default' | 'accept-all' | 'bypass';
+  updateProjectConfig(ctx.project.id, { permission_mode: validMode });
+
+  return `✅ Permission mode set to: \`${validMode}\``;
+}
+
+export function handleConfigTools(
+  ctx: CommandContext,
+  action?: string,
+  toolNames: string[] = []
+): string {
+  if (!action || !['allow', 'deny', 'reset'].includes(action.toLowerCase())) {
+    throw new InvalidArgumentError(
+      'Action must be allow, deny, or reset.',
+      'Usage: /tools <allow | deny | reset> [tool_names...]'
+    );
+  }
+
+  const act = action.toLowerCase();
+  const cfg = getOrCreateProjectConfig(ctx.project.id);
+  let allowed: string[] = JSON.parse(cfg.allowed_tools);
+  let denied: string[] = JSON.parse(cfg.denied_tools);
+
+  if (act === 'reset') {
+    allowed = [];
+    denied = [];
+  } else if (toolNames.length === 0) {
+    throw new InvalidArgumentError(
+      'Provide at least one tool name.',
+      'Example: /tools deny WebSearch'
+    );
+  } else if (act === 'allow') {
+    for (const t of toolNames) {
+      if (!allowed.includes(t)) allowed.push(t);
+      denied = denied.filter((d) => d !== t);
+    }
+  } else if (act === 'deny') {
+    for (const t of toolNames) {
+      if (!denied.includes(t)) denied.push(t);
+      allowed = allowed.filter((a) => a !== t);
+    }
+  }
+
+  updateProjectConfig(ctx.project.id, {
+    allowed_tools: JSON.stringify(allowed),
+    denied_tools: JSON.stringify(denied),
+  });
+
+  return [
+    '🛠️ *Tool Permissions Updated*',
+    `Allowed: [${allowed.join(', ') || 'None'}]`,
+    `Denied: [${denied.join(', ') || 'None'}]`,
+  ].join('\n');
+}
+
+export function handleConfigOutput(ctx: CommandContext, format?: string): string {
+  if (!format || !['json', 'text', 'stream-json'].includes(format.toLowerCase())) {
+    throw new InvalidArgumentError(
+      'Invalid output format.',
+      'Supported agent CLI output formats: json, text, stream-json.'
+    );
+  }
+
+  const validFormat = format.toLowerCase() as 'json' | 'text' | 'stream-json';
+  updateProjectConfig(ctx.project.id, { agent_output_format: validFormat });
+
+  return `✅ Agent CLI output format set to: \`${validFormat}\``;
+}
+
+export function handleConfigTurns(ctx: CommandContext, turnsStr?: string): string {
+  const turns = turnsStr ? parseInt(turnsStr, 10) : NaN;
+  if (isNaN(turns) || turns < 1 || turns > 50) {
+    throw new InvalidArgumentError(
+      'Max turns must be an integer between 1 and 50.',
+      'Usage: /turns 10'
+    );
+  }
+
+  updateProjectConfig(ctx.project.id, { max_turns: turns });
+  return `✅ Max turns set to: \`${turns}\``;
+}
+
+export function handleConfigBudget(ctx: CommandContext, budgetStr?: string): string {
+  if (!budgetStr) {
+    throw new InvalidArgumentError(
+      'Budget amount or "none" required.',
+      'Usage: /budget 2.50 or /budget none'
+    );
+  }
+
+  if (budgetStr.toLowerCase() === 'none') {
+    updateProjectConfig(ctx.project.id, { max_budget_usd: null });
+    return '✅ Budget cap removed (unlimited).';
+  }
+
+  const amount = parseFloat(budgetStr.replace('$', ''));
+  if (isNaN(amount) || amount <= 0) {
+    throw new InvalidArgumentError(
+      'Budget must be a positive number.',
+      'Example: /budget 2.00'
+    );
+  }
+
+  updateProjectConfig(ctx.project.id, { max_budget_usd: amount });
+  return `✅ Budget cap set to: \`$${amount.toFixed(2)}\``;
+}
+
+export function handleConfigWorktree(ctx: CommandContext, mode?: string): string {
+  if (!mode || !['enable', 'disable'].includes(mode.toLowerCase())) {
+    throw new InvalidArgumentError(
+      'Mode must be enable or disable.',
+      'Usage: /worktree <enable | disable>'
+    );
+  }
+
+  const enabled = mode.toLowerCase() === 'enable' ? 1 : 0;
+  updateProjectConfig(ctx.project.id, { worktree_enabled: enabled });
+
+  return `🌿 Git worktree isolation: \`${enabled ? 'ENABLED' : 'DISABLED'}\``;
+}
+
+export function handleConfigMcp(ctx: CommandContext, mcpPath?: string): string {
+  if (!mcpPath) {
+    throw new InvalidArgumentError(
+      'MCP config path or "none" required.',
+      'Usage: /mcp .claude/mcp.json or /mcp none'
+    );
+  }
+
+  const value = mcpPath.toLowerCase() === 'none' ? null : mcpPath;
+  updateProjectConfig(ctx.project.id, { mcp_config_path: value });
+
+  return `🔌 MCP Configuration: \`${value || 'DISABLED'}\``;
+}
+
+export function handleConfigRender(ctx: CommandContext, mode?: string): string {
+  if (!mode || !['compact', 'full', 'file'].includes(mode.toLowerCase())) {
+    throw new InvalidArgumentError(
+      'Render mode must be compact, full, or file.',
+      'Usage: /render <compact | full | file>'
+    );
+  }
+
+  const validMode = mode.toLowerCase() as 'compact' | 'full' | 'file';
+  updateProjectConfig(ctx.project.id, { render_mode: validMode });
+
+  return [
+    `📺 *WhatsApp Presentation Mode: ${validMode.toUpperCase()}*`,
+    validMode === 'compact'
+      ? 'Output will be delivered as concise summaries with changed file lists.'
+      : validMode === 'full'
+      ? 'Full raw output will be delivered in paginated text messages.'
+      : 'Full logs will be attached as downloadable documents.',
+  ].join('\n');
+}
