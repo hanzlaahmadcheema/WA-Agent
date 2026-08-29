@@ -1,10 +1,11 @@
 import type { proto } from '@whiskeysockets/baileys';
 import { processIncomingMessage } from '../router/command-router.js';
-import { authorizeUser } from '../security/authorizer.js';
+import { authorizeUser, isSenderAdmin, registerAdminLid } from '../security/authorizer.js';
 import { trackInboundMessage } from '../database/repositories/message-dedup.repo.js';
 import { UnauthorizedError, RateLimitedError } from '../router/errors.js';
 import { LIMITS } from '../security/limits.js';
 import { checkAndRecordRateLimit } from '../security/rate-limiter.js';
+import { config } from '../config.js';
 
 export interface PipelineResult {
   shouldReply: boolean;
@@ -36,7 +37,8 @@ export function extractMessageText(message: proto.IMessage | null | undefined): 
  * 5. Route command & generate reply
  */
 export async function executeMessagePipeline(
-  msg: proto.IWebMessageInfo
+  msg: proto.IWebMessageInfo,
+  resolveAdminLid?: (phone: string) => Promise<string | undefined>
 ): Promise<PipelineResult> {
   // 1. Sanity & Malformed Message Checks
   if (!msg || !msg.key) {
@@ -61,7 +63,19 @@ export async function executeMessagePipeline(
 
   const pushName = msg.pushName || undefined;
 
-  // 3. Authorization Check BEFORE parsing or command routing
+  // 3. On-demand admin LID resolution: if sender is an unverified LID user and admin LID is not yet known
+  if (senderJid.endsWith('@lid') && !isSenderAdmin(senderJid) && resolveAdminLid) {
+    try {
+      const resolved = await resolveAdminLid(config.ADMIN_PHONE_NUMBER);
+      if (resolved) {
+        registerAdminLid(resolved);
+      }
+    } catch {
+      // Resolution failure falls through to authorization check
+    }
+  }
+
+  // 4. Authorization Check BEFORE parsing or command routing
   try {
     authorizeUser(senderJid, pushName);
   } catch (err) {

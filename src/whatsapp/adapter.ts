@@ -13,6 +13,8 @@ import { ConnectionFSM, type ConnectionState } from './connection-fsm.js';
 import { executeMessagePipeline } from './message-pipeline.js';
 import { sendWithRetry } from './outbound-sender.js';
 import { setJobNotificationHandler } from '../jobs/job-manager.js';
+import { registerAdminLid } from '../security/authorizer.js';
+import { config } from '../config.js';
 
 export interface WhatsAppAdapterOptions {
   authDir?: string;
@@ -117,6 +119,25 @@ export class WhatsAppAdapter {
         if (!this.silent) {
           console.log('\n✅ [WhatsApp] Connected successfully! Control plane is live.');
         }
+
+        // Proactively resolve admin WhatsApp identity (both phone JID and LID)
+        try {
+          const results = await sock.onWhatsApp(config.ADMIN_PHONE_NUMBER);
+          if (results && results.length > 0) {
+            const adminInfo = results[0];
+            if (adminInfo.lid && typeof adminInfo.lid === 'string') {
+              registerAdminLid(adminInfo.lid);
+              if (!this.silent) {
+                console.log(`[WhatsApp] Admin LID discovered: ${adminInfo.lid}`);
+              }
+            }
+          }
+        } catch (err: any) {
+          if (!this.silent) {
+            console.warn(`[WhatsApp] Notice: Could not resolve admin LID on startup: ${err.message}`);
+          }
+        }
+
         await this.flushPendingNotifications();
       } else if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
@@ -167,7 +188,11 @@ export class WhatsAppAdapter {
 
       for (const msg of event.messages) {
         try {
-          const result = await executeMessagePipeline(msg);
+          const result = await executeMessagePipeline(msg, async (phone) => {
+            const res = await sock.onWhatsApp(phone);
+            const lid = res?.[0]?.lid;
+            return typeof lid === 'string' ? lid : undefined;
+          });
           if (result.shouldReply && result.replyText && result.recipientJid) {
             await sendWithRetry(
               (jid, content, opt) => sock.sendMessage(jid, content, opt),
