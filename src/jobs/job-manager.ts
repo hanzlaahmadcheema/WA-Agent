@@ -9,7 +9,7 @@ import {
   getJobById,
   saveJobOutput,
 } from '../database/repositories/job.repo.js';
-import { updateSessionMetrics } from '../database/repositories/session.repo.js';
+import { updateSessionMetrics, updateSessionAgentRef } from '../database/repositories/session.repo.js';
 import { acquireSessionLock, releaseSessionLock } from '../state/session-lock.js';
 import { getAgentDriver } from '../agents/agent-registry.js';
 import { spawnDetachedAgent, terminateProcessGroup } from './process-supervisor.js';
@@ -222,8 +222,14 @@ export async function launchJob(
         return;
       }
 
-      const isSuccess = exitCode === 0;
       const normalized = driver.normalizeOutput(stdout, stderr, exitCode);
+      const isSuccess = exitCode === 0 && normalized.isSuccess !== false;
+
+      // Update session's agent reference if the agent returns one (e.g. Antigravity conversation_id)
+      if (normalized.conversationId && session.agent_session_ref !== normalized.conversationId) {
+        updateSessionAgentRef(session.id, normalized.conversationId);
+        session.agent_session_ref = normalized.conversationId;
+      }
 
       const finished = finishJob(job.id, {
         status: isSuccess ? 'COMPLETED' : 'FAILED',

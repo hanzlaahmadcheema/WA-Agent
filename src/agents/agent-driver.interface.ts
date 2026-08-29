@@ -15,6 +15,12 @@ export interface NormalizedAgentResult {
   costUsd: number | null;
   turnsUsed: number | null;
   rawOutput: string;
+  isSuccess?: boolean;
+  conversationId?: string | null;
+  thinkingTokens?: number | null;
+  cacheReadTokens?: number | null;
+  totalTokens?: number | null;
+  structuredOutput?: any;
 }
 
 export interface AgentDriver {

@@ -43,6 +43,7 @@ const envSchema = z.object({
   DEFAULT_AGENT: z.string().default('claude'),
   DEFAULT_MODEL: z.string().default('claude-3-7-sonnet'),
   CLAUDE_BIN_PATH: z.string().default('claude'),
+  ANTIGRAVITY_BIN_PATH: z.string().default('agy'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   HEALTH_PORT: z.coerce.number().default(8080),
   HEALTH_ENABLED: z.coerce.boolean().default(true),

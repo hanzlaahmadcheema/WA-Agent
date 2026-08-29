@@ -119,3 +119,13 @@ export function updateSessionMetrics(
     WHERE id = ?
   `).run(newTurns, newTokensIn, newTokensOut, newCost, Date.now(), sessionId);
 }
+
+export function updateSessionAgentRef(sessionId: string, agentRef: string): void {
+  const db = getDatabase();
+  db.prepare(`
+    UPDATE sessions
+    SET agent_session_ref = ?, last_active_at = ?
+    WHERE id = ?
+  `).run(agentRef, Date.now(), sessionId);
+}
+

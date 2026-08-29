@@ -9,6 +9,7 @@ import { InvalidArgumentError, NotFoundError } from '../router/errors.js';
 
 export const SUPPORTED_AGENTS = [
   { name: 'claude', label: 'Claude Code', binary: 'claude' },
+  { name: 'antigravity', label: 'Antigravity', binary: 'agy' },
   { name: 'codex', label: 'Codex CLI', binary: 'codex' },
   { name: 'opencode', label: 'OpenCode', binary: 'opencode' },
 ];
