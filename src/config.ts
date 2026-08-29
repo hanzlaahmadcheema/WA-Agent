@@ -45,6 +45,7 @@ const envSchema = z.object({
   CLAUDE_BIN_PATH: z.string().default('claude'),
   ANTIGRAVITY_BIN_PATH: z.string().default('agy'),
   CODEX_BIN_PATH: z.string().default('codex'),
+  OPENCODE_BIN_PATH: z.string().default('opencode'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   HEALTH_PORT: z.coerce.number().default(8080),
   HEALTH_ENABLED: z.coerce.boolean().default(true),

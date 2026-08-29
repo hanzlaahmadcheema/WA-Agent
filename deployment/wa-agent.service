@@ -19,8 +19,8 @@ PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
 
-# Explicit ReadWritePaths required for Claude Code CLI, Antigravity CLI (agy), Codex CLI, and WA-Agent persistence
-ReadWritePaths=/home/hanzlaahmad/PersonalProjects /home/hanzlaahmad/PersonalProjects/WA-Agent/data /home/hanzlaahmad/PersonalProjects/WA-Agent/auth_info_baileys /home/hanzlaahmad/.claude /home/hanzlaahmad/.claude.json /home/hanzlaahmad/.gemini/antigravity-cli /home/hanzlaahmad/.codex
+# Explicit ReadWritePaths required for Claude Code CLI, Antigravity CLI (agy), Codex CLI, OpenCode CLI, and WA-Agent persistence
+ReadWritePaths=/home/hanzlaahmad/PersonalProjects /home/hanzlaahmad/PersonalProjects/WA-Agent/data /home/hanzlaahmad/PersonalProjects/WA-Agent/auth_info_baileys /home/hanzlaahmad/.claude /home/hanzlaahmad/.claude.json /home/hanzlaahmad/.gemini/antigravity-cli /home/hanzlaahmad/.codex /home/hanzlaahmad/.opencode /home/hanzlaahmad/.config/opencode
 
 # Resource limits
 LimitNOFILE=65535
