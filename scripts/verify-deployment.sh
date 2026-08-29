@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # WA-Agent Deployment Verification Script
-# Validates systemd unit, service user, permissions, and directory structure
+# Validates systemd unit, service user, Node.js runtime, permissions, and directory structure
 
 APP_DIR="/opt/wa-agent"
 VAR_DIR="/var/lib/wa-agent"
@@ -31,7 +31,7 @@ echo "════════════════════════�
 echo ""
 
 # 1. Systemd Service Unit
-echo "[1/6] Checking systemd service unit..."
+echo "[1/7] Checking systemd service unit..."
 if [ -f "${SYSTEMD_UNIT}" ]; then
     check_pass "Unit file exists: ${SYSTEMD_UNIT}"
     if grep -E "/home/[a-zA-Z0-9_-]+" "${SYSTEMD_UNIT}" >/dev/null 2>&1; then
@@ -51,13 +51,17 @@ if [ -f "${SYSTEMD_UNIT}" ]; then
     else
         check_warn "Unit does not enforce ProtectHome=read-only"
     fi
+
+    if grep -E "ExecStart=/opt/wa-agent/bin/node" "${SYSTEMD_UNIT}" >/dev/null 2>&1; then
+        check_pass "Unit executes dedicated runtime: /opt/wa-agent/bin/node"
+    fi
 else
     check_fail "Unit file missing: ${SYSTEMD_UNIT}"
 fi
 
 # 2. Service User & Group
 echo ""
-echo "[2/6] Checking service user & group..."
+echo "[2/7] Checking service user & group..."
 if getent group wa-agent >/dev/null 2>&1; then
     check_pass "System group exists: wa-agent"
 else
@@ -78,7 +82,7 @@ fi
 
 # 3. Application Directory
 echo ""
-echo "[3/6] Checking application directory (${APP_DIR})..."
+echo "[3/7] Checking application directory (${APP_DIR})..."
 if [ -d "${APP_DIR}" ]; then
     check_pass "Application directory exists"
     if [ -f "${APP_DIR}/dist/index.js" ]; then
@@ -96,9 +100,39 @@ else
     check_fail "Application directory missing: ${APP_DIR}"
 fi
 
-# 4. Environment File
+# 4. Node.js Runtime Verification
 echo ""
-echo "[4/6] Checking configuration environment (${ENV_FILE})..."
+echo "[4/7] Checking Node.js runtime..."
+NODE_EXEC="${APP_DIR}/bin/node"
+if [ ! -f "${NODE_EXEC}" ]; then
+    NODE_EXEC=$(command -v node 2>/dev/null || true)
+fi
+
+if [ -n "${NODE_EXEC}" ] && [ -x "${NODE_EXEC}" ]; then
+    check_pass "Node.js executable found: ${NODE_EXEC}"
+    NODE_VER=$("${NODE_EXEC}" -v 2>/dev/null || echo "unknown")
+    check_pass "Node.js version: ${NODE_VER}"
+
+    if "${NODE_EXEC}" -e '
+        const [maj, min] = process.versions.node.split(".");
+        if (parseInt(maj) < 22 || (parseInt(maj) === 22 && parseInt(min) < 5)) process.exit(1);
+        try {
+            require("node:sqlite");
+        } catch {
+            process.exit(1);
+        }
+    ' >/dev/null 2>&1; then
+        check_pass "Node.js runtime meets requirements (>= 22.5.0 with node:sqlite)"
+    else
+        check_fail "Incompatible Node.js runtime (${NODE_VER})! Requires Node.js >= 22.5.0 with built-in node:sqlite."
+    fi
+else
+    check_fail "No Node.js executable found at ${APP_DIR}/bin/node or in PATH"
+fi
+
+# 5. Environment File
+echo ""
+echo "[5/7] Checking configuration environment (${ENV_FILE})..."
 if [ -f "${ENV_FILE}" ]; then
     check_pass "Environment configuration exists: ${ENV_FILE}"
     PERMS=$(stat -c "%a" "${ENV_FILE}" 2>/dev/null || stat -f "%Lp" "${ENV_FILE}" 2>/dev/null || echo "unknown")
@@ -116,9 +150,9 @@ else
     check_fail "Environment configuration missing: ${ENV_FILE}"
 fi
 
-# 5. Persistent State Directories & Permissions
+# 6. Persistent State Directories & Permissions
 echo ""
-echo "[5/6] Checking persistent state directories (${VAR_DIR})..."
+echo "[6/7] Checking persistent state directories (${VAR_DIR})..."
 if [ -d "${VAR_DIR}" ]; then
     check_pass "State root exists: ${VAR_DIR}"
     
@@ -141,14 +175,14 @@ else
     check_fail "State root missing: ${VAR_DIR}"
 fi
 
-# 6. Service Runtime & Health Check (Optional / Non-blocking)
+# 7. Service Runtime & Health Check (Optional / Non-blocking)
 echo ""
-echo "[6/6] Checking service runtime status..."
+echo "[7/7] Checking service runtime status..."
 if systemctl is-active --quiet wa-agent 2>/dev/null; then
     check_pass "wa-agent service is ACTIVE and running"
     
     # Check health and readiness endpoints
-    HEALTH_PORT="${HEALTH_PORT:-8080}"
+    HEALTH_PORT="8080"
     if [ -f "${ENV_FILE}" ]; then
         HEALTH_PORT=$(grep '^HEALTH_PORT=' "${ENV_FILE}" | cut -d= -f2 || echo "8080")
     fi

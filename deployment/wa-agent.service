@@ -9,8 +9,8 @@ Group=wa-agent
 WorkingDirectory=/opt/wa-agent
 EnvironmentFile=/etc/wa-agent/environment
 Environment=HOME=/var/lib/wa-agent
-Environment=PATH=/var/lib/wa-agent/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/node /opt/wa-agent/dist/index.js
+Environment=PATH=/opt/wa-agent/bin:/var/lib/wa-agent/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/wa-agent/bin/node /opt/wa-agent/dist/index.js
 Restart=always
 RestartSec=5
 

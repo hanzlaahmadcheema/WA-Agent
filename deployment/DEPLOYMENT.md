@@ -120,8 +120,9 @@ tail -f /var/lib/wa-agent/data/logs/*.log
 
 ### Health & Readiness Endpoints
 ```bash
-curl http://localhost:8080/health
-curl http://localhost:8080/ready
+# Using default port 8085 (or configured HEALTH_PORT)
+curl http://localhost:8085/health
+curl http://localhost:8085/ready
 ```
 
 ### Operational Report

@@ -157,9 +157,9 @@ sudo systemctl status wa-agent
 # 4. Tail production logs
 journalctl -u wa-agent -f
 
-# 5. Verify HTTP health endpoints
-curl http://localhost:8080/health
-curl http://localhost:8080/ready
+# 5. Verify HTTP health endpoints (default port: 8085)
+curl http://localhost:8085/health
+curl http://localhost:8085/ready
 ```
 
 ---

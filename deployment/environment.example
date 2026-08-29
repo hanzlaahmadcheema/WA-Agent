@@ -17,7 +17,7 @@ LOG_DIR=/var/lib/wa-agent/data/logs
 LOG_LEVEL=info
 
 # Health and Readiness HTTP Endpoint
-HEALTH_PORT=8080
+HEALTH_PORT=8085
 HEALTH_ENABLED=true
 
 # Default Agent & Model

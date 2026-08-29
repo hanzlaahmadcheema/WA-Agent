@@ -31,7 +31,7 @@ test('Portable Systemd Deployment & Service Hardening Suite', async (suite) => {
     assert.match(content, /^WorkingDirectory=\/opt\/wa-agent/m, 'Must set WorkingDirectory to /opt/wa-agent');
     assert.match(content, /^EnvironmentFile=\/etc\/wa-agent\/environment/m, 'Must load /etc/wa-agent/environment');
     assert.match(content, /^Environment=HOME=\/var\/lib\/wa-agent/m, 'Must set HOME to /var/lib/wa-agent');
-    assert.match(content, /^ExecStart=\/usr\/bin\/node \/opt\/wa-agent\/dist\/index\.js/m, 'Must launch node /opt/wa-agent/dist/index.js');
+    assert.match(content, /^ExecStart=\/opt\/wa-agent\/bin\/node \/opt\/wa-agent\/dist\/index\.js/m, 'Must launch node /opt/wa-agent/dist/index.js');
   });
 
   await suite.test('3. Systemd unit file: security sandboxing directives verified', () => {
@@ -82,12 +82,22 @@ test('Portable Systemd Deployment & Service Hardening Suite', async (suite) => {
     assert.match(content, /useradd --system --gid wa-agent/);
     assert.match(content, /systemctl daemon-reload/);
     assert.match(content, /systemctl enable wa-agent/);
+    assert.match(content, /validate_node_binary/);
+    assert.match(content, /node:sqlite/);
 
     // Verify upgrade safety: preserves existing environment file
     assert.match(content, /Existing configuration preserved/);
   });
 
-  await suite.test('7. Uninstallation script: passes bash syntax check and preserves user data', () => {
+  await suite.test('7. Installation script: detects and validates Node runtime requirements', () => {
+    const content = fs.readFileSync(installerPath, 'utf8');
+    assert.match(content, /NODE_BIN/);
+    assert.match(content, /maj < 22/);
+    assert.match(content, /min < 5/);
+    assert.match(content, /opt\/wa-agent\/bin\/node/);
+  });
+
+  await suite.test('8. Uninstallation script: passes bash syntax check and preserves user data', () => {
     assert.ok(fs.existsSync(uninstallerPath), 'uninstall-service.sh must exist');
 
     // Validate bash syntax
@@ -102,19 +112,33 @@ test('Portable Systemd Deployment & Service Hardening Suite', async (suite) => {
     assert.ok(!content.includes('rm -rf "${VAR_DIR}"'), 'Must not automatically delete state directory');
   });
 
-  await suite.test('8. Verification script: passes bash syntax check', () => {
+  await suite.test('9. Verification script: passes bash syntax check and tests Node >= 22.5.0 + node:sqlite', () => {
     assert.ok(fs.existsSync(verifyPath), 'verify-deployment.sh must exist');
     execSync(`bash -n "${verifyPath}"`);
+
+    const content = fs.readFileSync(verifyPath, 'utf8');
+    assert.match(content, /Checking Node\.js runtime/);
+    assert.match(content, /node:sqlite/);
+    assert.match(content, /opt\/wa-agent\/bin\/node/);
   });
 
-  await suite.test('9. Runtime config resolution: BAILEYS_AUTH_DIR is supported and resolved', () => {
+  await suite.test('10. Runtime config resolution: BAILEYS_AUTH_DIR is supported and resolved', () => {
     assert.ok(typeof config.BAILEYS_AUTH_DIR === 'string');
     assert.ok(path.isAbsolute(config.BAILEYS_AUTH_DIR));
     // Defaults to ./auth_info_baileys inside workspace
     assert.ok(config.BAILEYS_AUTH_DIR.endsWith('auth_info_baileys'));
   });
 
-  await suite.test('10. Documentation: MIGRATION.md and DEPLOYMENT.md exist with complete procedures', () => {
+  await suite.test('11. Current Node runtime satisfies Node >= 22.5.0 and node:sqlite', () => {
+    const [maj, min] = process.versions.node.split('.').map(Number);
+    assert.ok(maj > 22 || (maj === 22 && min >= 5), `Expected Node >= 22.5.0, got ${process.versions.node}`);
+    assert.doesNotThrow(() => {
+      // @ts-ignore
+      import('node:sqlite');
+    });
+  });
+
+  await suite.test('12. Documentation: MIGRATION.md and DEPLOYMENT.md exist with complete procedures', () => {
     const migrationPath = path.join(rootDir, 'deployment/MIGRATION.md');
     const deploymentPath = path.join(rootDir, 'deployment/DEPLOYMENT.md');
 
