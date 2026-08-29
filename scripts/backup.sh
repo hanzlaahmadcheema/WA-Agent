@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -f "/etc/wa-agent/environment" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . /etc/wa-agent/environment
+    set +a
+fi
+
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BACKUP_DIR="${BASE_DIR}/backups"
+BACKUP_DIR="${BACKUP_DIR:-${BASE_DIR}/backups}"
 TIMESTAMP="$(date +'%Y%m%d_%H%M%S')"
 SNAPSHOT_DIR="${BACKUP_DIR}/snapshot_${TIMESTAMP}"
 ARCHIVE_FILE="${BACKUP_DIR}/wa_agent_backup_${TIMESTAMP}.tar.gz"
@@ -12,7 +19,7 @@ mkdir -p "${SNAPSHOT_DIR}" "${BACKUP_DIR}"
 echo "📦 [Backup] Creating atomic backup of WA-Agent state..."
 
 # 1. Atomic SQLite online backup (handles active WAL mode safely)
-DB_SRC="${BASE_DIR}/data/control_plane.db"
+DB_SRC="${DATABASE_PATH:-${BASE_DIR}/data/control_plane.db}"
 DB_DEST="${SNAPSHOT_DIR}/control_plane.db"
 if [ -f "${DB_SRC}" ]; then
     if command -v sqlite3 >/dev/null 2>&1; then
@@ -25,7 +32,7 @@ if [ -f "${DB_SRC}" ]; then
 fi
 
 # 2. Backup Baileys authentication credentials
-AUTH_SRC="${BASE_DIR}/auth_info_baileys"
+AUTH_SRC="${BAILEYS_AUTH_DIR:-${BASE_DIR}/auth_info_baileys}"
 AUTH_DEST="${SNAPSHOT_DIR}/auth_info_baileys"
 if [ -d "${AUTH_SRC}" ]; then
     echo "  - Backing up WhatsApp Baileys credentials..."

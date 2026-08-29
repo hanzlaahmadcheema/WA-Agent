@@ -33,7 +33,7 @@ async function bootstrap() {
   }
 
   console.log('[Init] Starting WhatsApp connection...');
-  const waAdapter = await startWhatsAppClient();
+  const waAdapter = await startWhatsAppClient(config.BAILEYS_AUTH_DIR);
   registerWhatsAppStateProvider(() => waAdapter.getConnectionState());
 
   process.on('SIGINT', async () => {

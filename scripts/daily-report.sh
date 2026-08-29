@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -f "/etc/wa-agent/environment" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . /etc/wa-agent/environment
+    set +a
+fi
+
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DB_FILE="${BASE_DIR}/data/control_plane.db"
-AUTH_FILE="${BASE_DIR}/auth_info_baileys/creds.json"
+DB_FILE="${DATABASE_PATH:-${BASE_DIR}/data/control_plane.db}"
+AUTH_DIR="${BAILEYS_AUTH_DIR:-${BASE_DIR}/auth_info_baileys}"
+AUTH_FILE="${AUTH_DIR}/creds.json"
 HEALTH_PORT="${HEALTH_PORT:-8080}"
 
 echo "====================================================="

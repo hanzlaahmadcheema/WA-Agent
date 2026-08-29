@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -f "/etc/wa-agent/environment" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . /etc/wa-agent/environment
+    set +a
+fi
+
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG_DIR="${BASE_DIR}/data/logs"
+LOG_DIR="${LOG_DIR:-${BASE_DIR}/data/logs}"
 
 echo "🧹 [Maintenance] Cleaning log files older than 7 days in ${LOG_DIR}..."
 if [ -d "${LOG_DIR}" ]; then

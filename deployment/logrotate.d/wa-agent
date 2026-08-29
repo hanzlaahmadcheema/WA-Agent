@@ -1,4 +1,4 @@
-/home/hanzlaahmad/PersonalProjects/WA-Agent/data/logs/*.log {
+/var/lib/wa-agent/data/logs/*.log {
     daily
     missingok
     rotate 14

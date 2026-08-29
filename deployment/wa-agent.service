@@ -1,15 +1,16 @@
 [Unit]
-Description=Claude Code WhatsApp Control Plane Daemon
+Description=WA-Agent WhatsApp Control Plane Daemon
 After=network.target
 
 [Service]
 Type=simple
-User=hanzlaahmad
-Group=hanzlaahmad
-WorkingDirectory=/home/hanzlaahmad/PersonalProjects/WA-Agent
-EnvironmentFile=/home/hanzlaahmad/PersonalProjects/WA-Agent/.env
-Environment=PATH=/home/hanzlaahmad/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/node /home/hanzlaahmad/PersonalProjects/WA-Agent/dist/index.js
+User=wa-agent
+Group=wa-agent
+WorkingDirectory=/opt/wa-agent
+EnvironmentFile=/etc/wa-agent/environment
+Environment=HOME=/var/lib/wa-agent
+Environment=PATH=/var/lib/wa-agent/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/node /opt/wa-agent/dist/index.js
 Restart=always
 RestartSec=5
 
@@ -19,8 +20,8 @@ PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
 
-# Explicit ReadWritePaths required for Claude Code CLI, Antigravity CLI (agy), Codex CLI, OpenCode CLI, Copilot CLI, and WA-Agent persistence
-ReadWritePaths=/home/hanzlaahmad/PersonalProjects /home/hanzlaahmad/PersonalProjects/WA-Agent/data /home/hanzlaahmad/PersonalProjects/WA-Agent/auth_info_baileys /home/hanzlaahmad/.claude /home/hanzlaahmad/.claude.json /home/hanzlaahmad/.gemini/antigravity-cli /home/hanzlaahmad/.codex /home/hanzlaahmad/.opencode /home/hanzlaahmad/.config/opencode /home/hanzlaahmad/.copilot
+# Writable state directory for SQLite, Baileys credentials, logs, and agent home state
+ReadWritePaths=/var/lib/wa-agent
 
 # Resource limits
 LimitNOFILE=65535

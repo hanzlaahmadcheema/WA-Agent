@@ -1,0 +1,39 @@
+# WA-Agent Production Environment Configuration Template
+# Target location: /etc/wa-agent/environment
+# Target permissions: root:wa-agent 0640
+
+NODE_ENV=production
+
+# Required: Administrator WhatsApp Phone Number (Digits only, e.g. 1234567890)
+ADMIN_PHONE_NUMBER=1234567890
+
+# Required: Allowed Sandbox Roots (comma-separated list of absolute paths)
+ALLOWED_ROOTS=/var/lib/wa-agent/projects
+
+# Persistent State Paths
+DATABASE_PATH=/var/lib/wa-agent/data/control_plane.db
+BAILEYS_AUTH_DIR=/var/lib/wa-agent/auth_info_baileys
+LOG_DIR=/var/lib/wa-agent/data/logs
+LOG_LEVEL=info
+
+# Health and Readiness HTTP Endpoint
+HEALTH_PORT=8080
+HEALTH_ENABLED=true
+
+# Default Agent & Model
+DEFAULT_AGENT=claude
+DEFAULT_MODEL=claude-3-7-sonnet
+
+# Agent Binary Executable Paths
+# Must resolve in PATH or be specified as absolute executable paths
+CLAUDE_BIN_PATH=claude
+ANTIGRAVITY_BIN_PATH=agy
+CODEX_BIN_PATH=codex
+OPENCODE_BIN_PATH=opencode
+COPILOT_BIN_PATH=copilot
+
+# Optional API Keys / Non-interactive Service Tokens
+# GEMINI_API_KEY=
+# CODEX_API_KEY=
+# GH_TOKEN=
+# ANTHROPIC_API_KEY=

@@ -36,6 +36,10 @@ const envSchema = z.object({
     .string()
     .default('./data/control_plane.db')
     .transform((p) => path.resolve(p)),
+  BAILEYS_AUTH_DIR: z
+    .string()
+    .default('./auth_info_baileys')
+    .transform((p) => path.resolve(p)),
   LOG_DIR: z
     .string()
     .default('./data/logs')
