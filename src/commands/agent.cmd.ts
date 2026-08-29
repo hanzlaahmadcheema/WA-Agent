@@ -12,6 +12,7 @@ export const SUPPORTED_AGENTS = [
   { name: 'antigravity', label: 'Antigravity', binary: 'agy' },
   { name: 'codex', label: 'Codex CLI', binary: 'codex' },
   { name: 'opencode', label: 'OpenCode', binary: 'opencode' },
+  { name: 'copilot', label: 'GitHub Copilot', binary: 'copilot' },
 ];
 
 export async function handleAgent(ctx: CommandContext): Promise<string> {

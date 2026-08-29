@@ -3,6 +3,7 @@ import { ClaudeCodeDriver } from './drivers/claude-code.driver.js';
 import { AntigravityDriver } from './drivers/antigravity.driver.js';
 import { CodexDriver } from './drivers/codex.driver.js';
 import { OpenCodeDriver } from './drivers/opencode.driver.js';
+import { CopilotDriver } from './drivers/copilot.driver.js';
 import { NotFoundError } from '../router/errors.js';
 
 const drivers = new Map<string, AgentDriver>();
@@ -20,6 +21,9 @@ drivers.set(defaultCodex.name, defaultCodex);
 const defaultOpenCode = new OpenCodeDriver();
 drivers.set(defaultOpenCode.name, defaultOpenCode);
 
+const defaultCopilot = new CopilotDriver();
+drivers.set(defaultCopilot.name, defaultCopilot);
+
 export function registerAgentDriver(driver: AgentDriver): void {
   drivers.set(driver.name.toLowerCase(), driver);
 }
@@ -30,7 +34,7 @@ export function getAgentDriver(name: string): AgentDriver {
     throw new NotFoundError(
       'Agent Driver',
       name,
-      'Currently supported drivers: claude, antigravity (agy), codex, opencode'
+      'Currently supported drivers: claude, antigravity (agy), codex, opencode, copilot'
     );
   }
   return driver;
