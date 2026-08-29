@@ -5,18 +5,22 @@ After=network.target
 [Service]
 Type=simple
 User=hanzlaahmad
+Group=hanzlaahmad
 WorkingDirectory=/home/hanzlaahmad/PersonalProjects/WA-Agent
 EnvironmentFile=/home/hanzlaahmad/PersonalProjects/WA-Agent/.env
+Environment=PATH=/home/hanzlaahmad/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/node /home/hanzlaahmad/PersonalProjects/WA-Agent/dist/index.js
 Restart=always
 RestartSec=5
 
-# Security Hardening
+# Security Hardening & Sandboxing
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/home/hanzlaahmad/PersonalProjects /home/hanzlaahmad/PersonalProjects/WA-Agent/data /home/hanzlaahmad/PersonalProjects/WA-Agent/auth_info_baileys
+
+# Explicit ReadWritePaths required for Claude Code CLI and WA-Agent persistence
+ReadWritePaths=/home/hanzlaahmad/PersonalProjects /home/hanzlaahmad/PersonalProjects/WA-Agent/data /home/hanzlaahmad/PersonalProjects/WA-Agent/auth_info_baileys /home/hanzlaahmad/.claude /home/hanzlaahmad/.claude.json
 
 # Resource limits
 LimitNOFILE=65535
