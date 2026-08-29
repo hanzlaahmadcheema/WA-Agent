@@ -9,7 +9,7 @@ HEALTH_PORT="${HEALTH_PORT:-8080}"
 echo "====================================================="
 echo "       📊 WA-Agent Daily Operational Report"
 echo "====================================================="
-echo "Report Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+echo "Report Timestamp (UTC): $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 echo ""
 
 # 1. Systemd / Process Status & Uptime
