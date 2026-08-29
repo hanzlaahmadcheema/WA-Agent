@@ -1,6 +1,7 @@
 import type { AgentDriver } from './agent-driver.interface.js';
 import { ClaudeCodeDriver } from './drivers/claude-code.driver.js';
 import { AntigravityDriver } from './drivers/antigravity.driver.js';
+import { CodexDriver } from './drivers/codex.driver.js';
 import { NotFoundError } from '../router/errors.js';
 
 const drivers = new Map<string, AgentDriver>();
@@ -12,6 +13,9 @@ const defaultAntigravity = new AntigravityDriver();
 drivers.set(defaultAntigravity.name, defaultAntigravity);
 drivers.set('agy', defaultAntigravity);
 
+const defaultCodex = new CodexDriver();
+drivers.set(defaultCodex.name, defaultCodex);
+
 export function registerAgentDriver(driver: AgentDriver): void {
   drivers.set(driver.name.toLowerCase(), driver);
 }
@@ -22,7 +26,7 @@ export function getAgentDriver(name: string): AgentDriver {
     throw new NotFoundError(
       'Agent Driver',
       name,
-      'Currently supported drivers: claude, antigravity (agy)'
+      'Currently supported drivers: claude, antigravity (agy), codex'
     );
   }
   return driver;
