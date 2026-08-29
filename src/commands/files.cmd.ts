@@ -8,8 +8,10 @@ import {
   InvalidArgumentError,
   NotFoundError,
 } from '../router/errors.js';
+import { checkAndRecordRateLimit } from '../security/rate-limiter.js';
 
 export async function handleFiles(ctx: CommandContext): Promise<string> {
+  checkAndRecordRateLimit(ctx.user.id, 'filesystem');
   const { subcommand, args } = ctx.parsed;
 
   switch (subcommand) {
@@ -187,6 +189,13 @@ export async function handleGrep(
     throw new InvalidArgumentError(
       'Pattern is required.',
       'Usage: /grep "<pattern>" [path]'
+    );
+  }
+
+  if (pattern.length > 200) {
+    throw new InvalidArgumentError(
+      'Pattern exceeds maximum allowed length (200 characters).',
+      'Use a concise search term or regex.'
     );
   }
 

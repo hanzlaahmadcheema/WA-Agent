@@ -17,9 +17,14 @@ export async function resolveSafePath(
   allowedRoots: string[],
   projectRoot?: string
 ): Promise<string> {
+  // Reject null-byte poisoning attacks
+  if (requestedPath.includes('\0')) {
+    throw new SandboxViolationError(requestedPath);
+  }
+
   let resolved: string;
 
-  // Handle tilde ~
+  // Handle tilde ~ expansion
   if (requestedPath === '~' || requestedPath.startsWith('~/')) {
     const base = projectRoot || allowedRoots[0];
     resolved = path.resolve(base, requestedPath.replace(/^~(?:\/)?/, ''));
@@ -29,13 +34,13 @@ export async function resolveSafePath(
     resolved = path.resolve(currentDir, requestedPath);
   }
 
-  // Canonicalize symlinks if target exists
+  // Canonicalize symlinks if target exists (defends against symlink escape attacks)
   let realPath: string;
   try {
     realPath = await fs.realpath(resolved);
   } catch (err: any) {
     if (err.code === 'ENOENT') {
-      // Check parent directory
+      // If path doesn't exist yet, check its canonical parent directory
       const parent = path.dirname(resolved);
       try {
         const realParent = await fs.realpath(parent);
@@ -48,6 +53,7 @@ export async function resolveSafePath(
     }
   }
 
+  // Enforce sandbox boundary on canonical destination
   if (!isContainedInRoots(realPath, allowedRoots)) {
     throw new SandboxViolationError(requestedPath);
   }

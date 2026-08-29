@@ -19,6 +19,7 @@ import { handleConfig } from '../commands/config.cmd.js';
 import { handleTask } from '../commands/task.cmd.js';
 import { handleSystem } from '../commands/system.cmd.js';
 import { getSelectionCache } from '../state/selection-cache.js';
+import { createCorrelationLogger } from '../logger.js';
 import type { CommandContext } from '../commands/types.js';
 
 export async function processIncomingMessage(
@@ -28,6 +29,8 @@ export async function processIncomingMessage(
 ): Promise<string | null> {
   const parsed = parseCommand(messageText);
   if (!parsed) return null;
+
+  const cmdLogger = createCorrelationLogger({ userId: senderJid });
 
   try {
     // 1. Authorize sender
@@ -45,6 +48,15 @@ export async function processIncomingMessage(
       project,
       parsed,
     };
+
+    cmdLogger.info(
+      {
+        command: parsed.command,
+        subcommand: parsed.subcommand,
+        argsCount: parsed.args.length,
+      },
+      'command.received'
+    );
 
     // 3. Handle raw numeric input (e.g. user just typing "2")
     if (parsed.command === 'select_numeric') {
@@ -110,9 +122,16 @@ export async function processIncomingMessage(
     return await dispatchCommand(ctx);
   } catch (err: any) {
     if (err instanceof ControlPlaneError) {
+      cmdLogger.warn(
+        { category: err.category, reason: err.reason },
+        'command.client_error'
+      );
       return err.toWhatsApp();
     }
-    console.error('Unexpected execution error:', err);
+    cmdLogger.error(
+      { error: err.message, stack: err.stack },
+      'command.internal_error'
+    );
     return `❌ *ERR_INTERNAL*: An unexpected error occurred.\n👉 Reason: ${err.message || 'Unknown internal error'}`;
   }
 }

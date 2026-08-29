@@ -44,6 +44,8 @@ const envSchema = z.object({
   DEFAULT_MODEL: z.string().default('claude-3-7-sonnet'),
   CLAUDE_BIN_PATH: z.string().default('claude'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  HEALTH_PORT: z.coerce.number().default(8080),
+  HEALTH_ENABLED: z.coerce.boolean().default(true),
 });
 
 const parsed = envSchema.safeParse(process.env);

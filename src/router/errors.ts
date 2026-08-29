@@ -9,7 +9,8 @@ export type ErrorCategory =
   | 'ERR_AGENT_UNAVAILABLE'
   | 'ERR_JOB_COLLISION'
   | 'ERR_SELECTION_EXPIRED'
-  | 'ERR_INVALID_CONFIG';
+  | 'ERR_INVALID_CONFIG'
+  | 'ERR_RATE_LIMITED';
 
 export class ControlPlaneError extends Error {
   constructor(
@@ -101,3 +102,14 @@ export class NoActiveSessionError extends ControlPlaneError {
     );
   }
 }
+
+export class RateLimitedError extends ControlPlaneError {
+  constructor(retryAfterSeconds: number = 30) {
+    super(
+      'ERR_RATE_LIMITED',
+      'Too many requests.',
+      `Try again in ${retryAfterSeconds} seconds.`
+    );
+  }
+}
+

@@ -14,6 +14,8 @@ import { acquireSessionLock, releaseSessionLock } from '../state/session-lock.js
 import { getAgentDriver } from '../agents/agent-registry.js';
 import { spawnDetachedAgent, terminateProcessGroup } from './process-supervisor.js';
 import { StreamCollector } from './stream-collector.js';
+import { LIMITS } from '../security/limits.js';
+import { createCorrelationLogger, sanitizePromptForLog } from '../logger.js';
 import {
   InvalidArgumentError,
   NotFoundError,
@@ -34,6 +36,7 @@ interface ActiveProcessInfo {
   userId: string;
   stdoutCollector: StreamCollector;
   stderrCollector: StreamCollector;
+  timeoutTimer: NodeJS.Timeout;
 }
 
 const activeProcesses = new Map<number, ActiveProcessInfo>();
@@ -63,6 +66,18 @@ export async function launchJob(
     commandArgs,
   });
 
+  const jobLogger = createCorrelationLogger({
+    userId,
+    projectId: project.id,
+    sessionId: session.id,
+    jobId: job.id,
+  });
+
+  jobLogger.info(
+    { prompt: sanitizePromptForLog(prompt), agent: project.selected_agent },
+    'job.created'
+  );
+
   try {
     acquireSessionLock(session.id, job.id);
   } catch (err) {
@@ -71,6 +86,7 @@ export async function launchJob(
       failureReason: 'PROCESS_ERROR',
       errorMessage: 'Session lock acquisition collision.',
     });
+    jobLogger.warn({ error: (err as any).message }, 'job.collision');
     throw err;
   }
 
@@ -85,6 +101,7 @@ export async function launchJob(
       failureReason: 'PROCESS_ERROR',
       errorMessage: `Failed to spawn agent binary "${commandArgs[0]}": ${err.message}`,
     });
+    jobLogger.error({ error: err.message }, 'job.failed_spawn');
     throw new InvalidArgumentError(
       `Failed to launch agent binary "${commandArgs[0]}".`,
       'Verify that the CLI binary is installed and executable on the host.'
@@ -102,6 +119,8 @@ export async function launchJob(
       errorMessage: err.message,
     });
 
+    jobLogger.error({ error: err.message }, 'job.error');
+
     if (notificationHandler) {
       notificationHandler(
         userId,
@@ -118,6 +137,7 @@ export async function launchJob(
       failureReason: 'PROCESS_ERROR',
       errorMessage: `Failed to spawn agent binary "${commandArgs[0]}": Executable not found or not runnable.`,
     });
+    jobLogger.error('job.missing_pid');
     throw new InvalidArgumentError(
       `Agent binary "${commandArgs[0]}" could not be launched.`,
       'Verify that the CLI binary is installed and executable on the host.'
@@ -125,9 +145,30 @@ export async function launchJob(
   }
 
   updateJobRunning(job.id, pid);
+  jobLogger.info({ pid }, 'job.started');
 
   const stdoutCollector = new StreamCollector();
   const stderrCollector = new StreamCollector();
+
+  // Enforce maximum execution runtime watchdog
+  const timeoutTimer = setTimeout(async () => {
+    jobLogger.warn({ maxRuntimeMs: LIMITS.MAX_JOB_RUNTIME_MS }, 'job.timeout');
+    try {
+      await cancelJob(job.id, userId);
+      finishJob(job.id, {
+        status: 'TIMED_OUT',
+        failureReason: 'TIMEOUT',
+        errorMessage: `Task exceeded maximum runtime limit of ${Math.round(LIMITS.MAX_JOB_RUNTIME_MS / 60000)} minutes.`,
+      });
+      if (notificationHandler) {
+        notificationHandler(
+          userId,
+          `⏱️ *Job #${job.id} Timed Out*\nTask exceeded maximum execution limit (${Math.round(LIMITS.MAX_JOB_RUNTIME_MS / 60000)}m).`
+        );
+      }
+    } catch {}
+  }, LIMITS.MAX_JOB_RUNTIME_MS);
+  timeoutTimer.unref();
 
   activeProcesses.set(job.id, {
     child,
@@ -135,6 +176,7 @@ export async function launchJob(
     userId,
     stdoutCollector,
     stderrCollector,
+    timeoutTimer,
   });
 
   child.stdout?.on('data', (chunk: Buffer) => {
@@ -146,18 +188,19 @@ export async function launchJob(
   });
 
   child.on('close', (exitCode) => {
-    try {
-      activeProcesses.delete(job.id);
+    clearTimeout(timeoutTimer);
+    activeProcesses.delete(job.id);
 
+    try {
       const latestJob = getJobById(job.id);
-      const wasCancelRequested = latestJob?.status === 'CANCEL_REQUESTED';
+      const wasCancelledOrRequested =
+        latestJob?.status === 'CANCEL_REQUESTED' || latestJob?.status === 'CANCELLED';
 
       const stdout = stdoutCollector.getString();
       const stderr = stderrCollector.getString();
-
       saveJobOutput(job.id, stdout, stderr);
 
-      if (wasCancelRequested) {
+      if (wasCancelledOrRequested) {
         finishJob(job.id, {
           status: 'CANCELLED',
           exitCode,
@@ -168,7 +211,9 @@ export async function launchJob(
           stderrTruncated: stderrCollector.truncated,
         });
 
-        if (notificationHandler) {
+        jobLogger.info({ exitCode }, 'job.cancelled');
+
+        if (notificationHandler && latestJob?.status === 'CANCEL_REQUESTED') {
           notificationHandler(
             userId,
             `🛑 *Job #${job.id} Cancelled*\nProcess terminated.`
@@ -195,6 +240,18 @@ export async function launchJob(
         stdoutTruncated: stdoutCollector.truncated,
         stderrTruncated: stderrCollector.truncated,
       });
+
+      if (isSuccess) {
+        jobLogger.info(
+          { exitCode, durationMs: finished.duration_ms, costUsd: normalized.costUsd },
+          'job.completed'
+        );
+      } else {
+        jobLogger.warn(
+          { exitCode, durationMs: finished.duration_ms, error: normalized.summary },
+          'job.failed'
+        );
+      }
 
       // Update parent session totals
       updateSessionMetrics(
@@ -291,4 +348,35 @@ export async function cancelJob(jobId: number, userId: string): Promise<void> {
   } else if (job.pid) {
     await terminateProcessGroup(job.pid);
   }
+}
+
+/**
+ * Gracefully terminates all active process groups on daemon shutdown.
+ */
+export async function shutdownAllJobs(timeoutMs = 3000): Promise<void> {
+  const activeIds = Array.from(activeProcesses.keys());
+  if (activeIds.length === 0) return;
+
+  const killPromises = activeIds.map(async (jobId) => {
+    const procInfo = activeProcesses.get(jobId);
+    if (!procInfo) return;
+
+    clearTimeout(procInfo.timeoutTimer);
+    const pid = procInfo.child.pid;
+
+    finishJob(jobId, {
+      status: 'CANCELLED',
+      failureReason: 'USER_CANCEL',
+      errorMessage: 'Task gracefully terminated during server shutdown.',
+    });
+
+    releaseSessionLock(procInfo.sessionId, jobId);
+
+    if (pid) {
+      await terminateProcessGroup(pid, timeoutMs);
+    }
+  });
+
+  await Promise.all(killPromises);
+  activeProcesses.clear();
 }

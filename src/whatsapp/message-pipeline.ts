@@ -2,7 +2,9 @@ import type { proto } from '@whiskeysockets/baileys';
 import { processIncomingMessage } from '../router/command-router.js';
 import { authorizeUser } from '../security/authorizer.js';
 import { trackInboundMessage } from '../database/repositories/message-dedup.repo.js';
-import { UnauthorizedError } from '../router/errors.js';
+import { UnauthorizedError, RateLimitedError } from '../router/errors.js';
+import { LIMITS } from '../security/limits.js';
+import { checkAndRecordRateLimit } from '../security/rate-limiter.js';
 
 export interface PipelineResult {
   shouldReply: boolean;
@@ -91,6 +93,28 @@ export async function executeMessagePipeline(
   const text = extractMessageText(msg.message);
   if (!text || !text.trim()) {
     return { shouldReply: false, ignoredReason: 'No text content' };
+  }
+
+  // 5.1 Enforce maximum message length
+  if (text.length > LIMITS.MAX_MESSAGE_CHARS) {
+    return {
+      shouldReply: true,
+      recipientJid: msg.key.remoteJid!,
+      replyText: `❌ *ERR_INVALID_ARG*: Message exceeds maximum allowed size of ${LIMITS.MAX_MESSAGE_CHARS.toLocaleString()} characters.\n👉 Shorten your message.`,
+    };
+  }
+
+  // 5.2 Enforce inbound message rate limit
+  try {
+    checkAndRecordRateLimit(senderJid, 'inbound');
+  } catch (err: any) {
+    if (err instanceof RateLimitedError) {
+      return {
+        shouldReply: true,
+        recipientJid: msg.key.remoteJid!,
+        replyText: err.toWhatsApp(),
+      };
+    }
   }
 
   // Only route messages that start with / or are numeric selections

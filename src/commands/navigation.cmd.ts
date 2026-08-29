@@ -14,8 +14,10 @@ import {
   NotFoundError,
   SandboxViolationError,
 } from '../router/errors.js';
+import { checkAndRecordRateLimit } from '../security/rate-limiter.js';
 
 export async function handleNavigation(ctx: CommandContext): Promise<string> {
+  checkAndRecordRateLimit(ctx.user.id, 'filesystem');
   const { subcommand, args } = ctx.parsed;
 
   switch (subcommand) {
@@ -131,8 +133,14 @@ export async function handleCd(ctx: CommandContext, target?: string): Promise<st
   }
 
   const stat = await fs.stat(resolvedDir).catch(() => null);
-  if (!stat || !stat.isDirectory()) {
+  if (!stat) {
     throw new NotFoundError('Directory', resolvedDir);
+  }
+  if (!stat.isDirectory()) {
+    throw new InvalidArgumentError(
+      `"${resolvedDir}" is not a directory.`,
+      'Use /view, /head, or /tail to inspect files.'
+    );
   }
 
   // Update DB state
@@ -177,17 +185,24 @@ export async function handleTree(ctx: CommandContext, depthStr?: string): Promis
   }
 
   const lines: string[] = [`🌳 *Tree: ${path.basename(ctx.project.cwd)} (depth: ${depth})*`, ''];
+  let totalEntries = 0;
+  const MAX_ENTRIES = 100;
 
   async function buildTree(dir: string, currentDepth: number, prefix: string) {
-    if (currentDepth > depth) return;
+    if (currentDepth > depth || totalEntries >= MAX_ENTRIES) return;
     const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
     const filtered = entries.filter((e) => !['.git', 'node_modules', 'dist', '.next'].includes(e.name));
 
     for (let i = 0; i < filtered.length; i++) {
+      if (totalEntries >= MAX_ENTRIES) {
+        lines.push(`${prefix}... [capped at ${MAX_ENTRIES} entries]`);
+        return;
+      }
       const entry = filtered[i];
       const isLast = i === filtered.length - 1;
       const pointer = isLast ? '└── ' : '├── ';
       lines.push(`${prefix}${pointer}${entry.name}${entry.isDirectory() ? '/' : ''}`);
+      totalEntries++;
 
       if (entry.isDirectory()) {
         const nextPrefix = prefix + (isLast ? '    ' : '│   ');

@@ -11,6 +11,7 @@ import { getActiveProject } from '../src/database/repositories/project.repo.js';
 import { isSessionLocked } from '../src/state/session-lock.js';
 import { registerAgentDriver } from '../src/agents/agent-registry.js';
 import { ClaudeCodeDriver } from '../src/agents/drivers/claude-code.driver.js';
+import { resetRateLimits } from '../src/security/rate-limiter.js';
 import type { AgentRunOptions } from '../src/agents/agent-driver.interface.js';
 import { config } from '../src/config.js';
 
@@ -165,6 +166,7 @@ test('Milestone 2: Real /run Execution & Edge Cases', async (suite) => {
   });
 
   await suite.test('5. Claude process crashes (non-zero exit code)', async () => {
+    resetRateLimits(USER_A_JID);
     class MockCrashingDriver extends ClaudeCodeDriver {
       buildCommandArgs(): string[] {
         return [
@@ -191,6 +193,7 @@ test('Milestone 2: Real /run Execution & Edge Cases', async (suite) => {
   });
 
   await suite.test('6. Malformed JSON output from Claude', async () => {
+    resetRateLimits(USER_A_JID);
     class MockMalformedJsonDriver extends ClaudeCodeDriver {
       buildCommandArgs(): string[] {
         return [
@@ -216,6 +219,7 @@ test('Milestone 2: Real /run Execution & Edge Cases', async (suite) => {
   });
 
   await suite.test('7. Binary missing / invalid executable', async () => {
+    resetRateLimits(USER_A_JID);
     class MockMissingBinaryDriver extends ClaudeCodeDriver {
       buildCommandArgs(): string[] {
         return ['/usr/bin/nonexistent-claude-binary-xyz', '-p', 'hello'];
@@ -231,6 +235,7 @@ test('Milestone 2: Real /run Execution & Edge Cases', async (suite) => {
   });
 
   await suite.test('8. >5 MB Output Truncation Protection', async () => {
+    resetRateLimits(USER_A_JID);
     class MockLargeOutputDriver extends ClaudeCodeDriver {
       buildCommandArgs(): string[] {
         return [

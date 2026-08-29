@@ -1,0 +1,26 @@
+[Unit]
+Description=Claude Code WhatsApp Control Plane Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=hanzlaahmad
+WorkingDirectory=/home/hanzlaahmad/PersonalProjects/WA-Agent
+EnvironmentFile=/home/hanzlaahmad/PersonalProjects/WA-Agent/.env
+ExecStart=/usr/bin/node /home/hanzlaahmad/PersonalProjects/WA-Agent/dist/index.js
+Restart=always
+RestartSec=5
+
+# Security Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/hanzlaahmad/PersonalProjects /home/hanzlaahmad/PersonalProjects/WA-Agent/data /home/hanzlaahmad/PersonalProjects/WA-Agent/auth_info_baileys
+
+# Resource limits
+LimitNOFILE=65535
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

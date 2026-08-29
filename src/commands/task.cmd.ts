@@ -17,6 +17,8 @@ import {
   NotFoundError,
   NoActiveSessionError,
 } from '../router/errors.js';
+import { LIMITS } from '../security/limits.js';
+import { checkAndRecordRateLimit } from '../security/rate-limiter.js';
 
 export async function handleTask(ctx: CommandContext): Promise<string> {
   const { subcommand, args, rawTrailing } = ctx.parsed;
@@ -44,6 +46,16 @@ export async function handleRun(ctx: CommandContext, prompt?: string): Promise<s
       'Usage: /run <instruction> (e.g. /run Fix the authentication bug)'
     );
   }
+
+  if (cleanPrompt.length > LIMITS.MAX_PROMPT_CHARS) {
+    throw new InvalidArgumentError(
+      `Prompt exceeds maximum limit of ${LIMITS.MAX_PROMPT_CHARS.toLocaleString()} characters.`,
+      'Break your instruction into smaller, focused tasks.'
+    );
+  }
+
+  // Enforce rate limiting for /run
+  checkAndRecordRateLimit(ctx.user.id, 'run');
 
   const activeSession = getActiveSession(ctx.project.id);
   if (!activeSession) {
