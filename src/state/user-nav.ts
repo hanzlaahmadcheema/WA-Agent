@@ -69,6 +69,40 @@ export function getUserNavCwd(userId: string): string {
     }
   }
 
+  // 1. Configured DEFAULT_CWD
+  if (config.DEFAULT_CWD && fs.existsSync(config.DEFAULT_CWD)) {
+    try {
+      const real = fs.realpathSync(config.DEFAULT_CWD);
+      if (isContainedInRoots(real, config.ALLOWED_ROOTS)) {
+        userNavState.set(userId, real);
+        return real;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Candidate home directories
+  const candidateHomes = [
+    process.env.DEFAULT_CWD,
+    process.env.HOME,
+    '/home/hanzlaahmad',
+  ].filter(Boolean) as string[];
+
+  for (const h of candidateHomes) {
+    if (fs.existsSync(h)) {
+      try {
+        const real = fs.realpathSync(h);
+        if (isContainedInRoots(real, config.ALLOWED_ROOTS)) {
+          userNavState.set(userId, real);
+          return real;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   const defaultCwd = config.ALLOWED_ROOTS[0];
   userNavState.set(userId, defaultCwd);
   return defaultCwd;

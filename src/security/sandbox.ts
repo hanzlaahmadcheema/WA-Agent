@@ -26,7 +26,26 @@ export async function resolveSafePath(
 
   // Handle tilde ~ expansion
   if (requestedPath === '~' || requestedPath.startsWith('~/')) {
-    const base = projectRoot || allowedRoots[0];
+    const candidateHomes = [
+      process.env.DEFAULT_CWD,
+      process.env.HOME,
+      '/home/hanzlaahmad',
+    ].filter(Boolean) as string[];
+
+    let matchedHome: string | undefined;
+    for (const h of candidateHomes) {
+      try {
+        const norm = path.resolve(h);
+        if (isContainedInRoots(norm, allowedRoots)) {
+          matchedHome = norm;
+          break;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const base = matchedHome || projectRoot || allowedRoots[0];
     resolved = path.resolve(base, requestedPath.replace(/^~(?:\/)?/, ''));
   } else if (path.isAbsolute(requestedPath)) {
     resolved = path.resolve(requestedPath);

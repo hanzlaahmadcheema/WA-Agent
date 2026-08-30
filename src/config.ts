@@ -32,6 +32,10 @@ const envSchema = z.object({
     .string()
     .min(5, 'ADMIN_PHONE_NUMBER must be at least 5 digits')
     .regex(/^\d+$/, 'ADMIN_PHONE_NUMBER must contain only digits'),
+  DEFAULT_CWD: z
+    .string()
+    .optional()
+    .transform((val) => (val ? path.resolve(val.trim()) : undefined)),
   ADMIN_LID: z
     .string()
     .optional()
