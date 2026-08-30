@@ -172,12 +172,19 @@ export function handleSessionCreate(ctx: CommandContext, name?: string): string 
 }
 
 export function handleSessionList(ctx: CommandContext): string {
-  const db = getDatabase();
-  const allSessions = db
-    .prepare('SELECT s.*, p.name as project_name FROM sessions s JOIN projects p ON s.project_id = p.id WHERE s.user_id = ? ORDER BY s.last_active_at DESC')
-    .all(ctx.user.id) as unknown as Array<Session & { project_name: string }>;
+  // Require an active project — sessions are scoped to a project
+  if (!ctx.project) {
+    return [
+      'ℹ️ *No sessions found.*',
+      '',
+      'Select a project first:',
+      '  `/project select <path>`',
+    ].join('\n');
+  }
 
-  if (allSessions.length === 0) {
+  const sessions = getProjectSessions(ctx.project.id);
+
+  if (sessions.length === 0) {
     return [
       'ℹ️ *No sessions found.*',
       '',
@@ -189,9 +196,9 @@ export function handleSessionList(ctx: CommandContext): string {
   const selectionItems: SelectionItem[] = [];
   const lines: string[] = ['💬 *Your Sessions*', ''];
 
-  allSessions.forEach((s, idx) => {
+  sessions.forEach((s, idx) => {
     const index = idx + 1;
-    const isActive = s.status === 'ACTIVE' && ctx.project && ctx.project.id === s.project_id;
+    const isActive = s.status === 'ACTIVE';
     const shortId = s.id.replace(/^sess_/, '');
     const agentMeta = SUPPORTED_AGENTS.find((a) => a.name === s.agent_name);
     const agentDisplay = agentMeta?.label || s.agent_name;
@@ -204,7 +211,7 @@ export function handleSessionList(ctx: CommandContext): string {
     });
 
     lines.push(
-      `${isActive ? '▶' : ' '} #${shortId}  *${agentDisplay}*  ${s.project_name} (${s.name}) [${s.status}]`
+      `${isActive ? '▶' : ' '} #${shortId}  *${agentDisplay}*  ${ctx.project!.name} (${s.name}) [${s.status}]`
     );
   });
 
@@ -214,6 +221,7 @@ export function handleSessionList(ctx: CommandContext): string {
 
   return lines.join('\n');
 }
+
 
 export function handleSessionSelect(ctx: CommandContext, target?: string): string {
   if (!target) {
