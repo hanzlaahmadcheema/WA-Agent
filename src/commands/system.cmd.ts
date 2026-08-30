@@ -2,6 +2,7 @@ import type { CommandContext } from './types.js';
 import { getActiveSession } from '../database/repositories/session.repo.js';
 import { getActiveJobForSession } from '../state/session-lock.js';
 import { config } from '../config.js';
+import { isCliActive } from '../state/cli-session.js';
 
 export async function handleSystem(ctx: CommandContext): Promise<string> {
   const { subcommand, args } = ctx.parsed;
@@ -34,10 +35,12 @@ export function handleStatus(ctx: CommandContext): string {
   const uptimeSec = Math.floor(process.uptime());
   const hours = Math.floor(uptimeSec / 3600);
   const mins = Math.floor((uptimeSec % 3600) / 60);
+  const cliStatus = isCliActive(ctx.user.id) ? '🟢 Active' : '🔴 Stopped (Use /start)';
 
   return [
     '📊 *System Status*',
     '',
+    `• *CLI Session*: ${cliStatus}`,
     `• *Directory*: \`${ctx.navCwd}\``,
     `• *Project*: ${projDisplay}`,
     `• *Active Agent*: ${agentDisplay}`,

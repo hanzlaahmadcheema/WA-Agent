@@ -6,6 +6,7 @@ import { initDatabase, closeDatabase, getDatabase } from '../src/database/connec
 import { processIncomingMessage } from '../src/router/command-router.js';
 import { resetRateLimits } from '../src/security/rate-limiter.js';
 import { getUserNavCwd, setUserNavCwd, resetUserNav } from '../src/state/user-nav.js';
+import { stopCliSession } from '../src/state/cli-session.js';
 import { config } from '../src/config.js';
 
 const TEST_DB = path.resolve('./data/test_terminal_workflow.db');
@@ -17,6 +18,7 @@ test('Milestone 6: WhatsApp Terminal Navigation & Session Workflow Suite', async
   initDatabase(TEST_DB);
   resetRateLimits();
   resetUserNav(ADMIN_JID);
+  stopCliSession(ADMIN_JID);
 
   suite.after(() => {
     closeDatabase();
@@ -26,7 +28,15 @@ test('Milestone 6: WhatsApp Terminal Navigation & Session Workflow Suite', async
   const allowedRoot = config.ALLOWED_ROOTS[0];
 
   await suite.test('6A. Terminal Navigation: /menu, /pwd, /ls, /cd, /back, and root boundary', async () => {
-    // 1. Initial menu displays full context header
+    // 0. Before /start, commands like /ls are blocked
+    const preBlocked = await processIncomingMessage(ADMIN_JID, '/ls');
+    assert.match(preBlocked!, /⏸️ \*WA-Agent CLI is stopped\.\*/);
+
+    // 1. Start CLI session
+    const startInit = await processIncomingMessage(ADMIN_JID, '/start');
+    assert.match(startInit!, /🚀 \*WA-Agent CLI Started\*/);
+
+    // 2. Menu displays full context header
     const menuRes = await processIncomingMessage(ADMIN_JID, '/menu');
     assert.ok(menuRes);
     assert.match(menuRes, /🤖 \*WA-Agent\*/);
@@ -157,5 +167,30 @@ test('Milestone 6: WhatsApp Terminal Navigation & Session Workflow Suite', async
     // Change nav dir and test persistence
     setUserNavCwd(ADMIN_JID, allowedRoot);
     assert.equal(getUserNavCwd(ADMIN_JID), allowedRoot);
+  });
+
+  await suite.test('6G. CLI Lifecycle: /start and /stop session gating', async () => {
+    // 1. Explicitly stop CLI
+    const stopRes = await processIncomingMessage(ADMIN_JID, '/stop');
+    assert.match(stopRes!, /⏹️ \*WA-Agent CLI Stopped\*/);
+
+    // 2. /ls should NOT work when stopped
+    const lsStoppedRes = await processIncomingMessage(ADMIN_JID, '/ls');
+    assert.match(lsStoppedRes!, /⏸️ \*WA-Agent CLI is stopped\.\*/);
+    assert.match(lsStoppedRes!, /Type `\/start` to begin your session\./);
+
+    // 3. /cd should NOT work when stopped
+    const cdStoppedRes = await processIncomingMessage(ADMIN_JID, '/cd WA-Agent');
+    assert.match(cdStoppedRes!, /⏸️ \*WA-Agent CLI is stopped\.\*/);
+
+    // 4. /start activates CLI
+    const startRes = await processIncomingMessage(ADMIN_JID, '/start');
+    assert.match(startRes!, /🚀 \*WA-Agent CLI Started\*/);
+    assert.match(startRes!, /📁 \*Project\*:\s+Not selected/);
+    assert.match(startRes!, /🧠 \*Agent\*:\s+Not selected/);
+
+    // 5. /ls now works
+    const lsActiveRes = await processIncomingMessage(ADMIN_JID, '/ls');
+    assert.match(lsActiveRes!, /📁/);
   });
 });

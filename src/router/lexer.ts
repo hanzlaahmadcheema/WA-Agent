@@ -122,6 +122,8 @@ export function parseCommand(input: string): ParsedCommand | null {
     cancel: { command: 'task', subcommand: 'cancel' },
     status: { command: 'system', subcommand: 'status' },
     help: { command: 'system', subcommand: 'help' },
+    start: { command: 'start' },
+    stop: { command: 'stop' },
   };
 
   let command = firstToken;

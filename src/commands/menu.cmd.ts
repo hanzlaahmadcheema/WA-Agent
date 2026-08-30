@@ -63,5 +63,9 @@ export function handleMenu(ctx: CommandContext): string {
     '  `/status`',
     '  `/help`',
     '  `/menu`',
+    '',
+    '*Session Control*',
+    '  `/start`',
+    '  `/stop`',
   ].join('\n');
 }

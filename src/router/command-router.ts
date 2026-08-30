@@ -16,9 +16,13 @@ import { handleSession } from '../commands/session.cmd.js';
 import { handleConfig } from '../commands/config.cmd.js';
 import { handleTask } from '../commands/task.cmd.js';
 import { handleSystem } from '../commands/system.cmd.js';
-import { getSelectionCache } from '../state/selection-cache.js';
+import { getSelectionCache, clearSelectionCache } from '../state/selection-cache.js';
 import { createCorrelationLogger } from '../logger.js';
 import type { CommandContext } from '../commands/types.js';
+import { isCliActive, startCliSession, stopCliSession } from '../state/cli-session.js';
+import { resetUserNav } from '../state/user-nav.js';
+import { getDatabase } from '../database/connection.js';
+import { closeActiveSession } from '../database/repositories/session.repo.js';
 
 export async function processIncomingMessage(
   senderJid: string,
@@ -54,7 +58,55 @@ export async function processIncomingMessage(
       'command.received'
     );
 
-    // 3. Handle raw numeric input (e.g. user just typing "2")
+    // 3. Handle explicit /start and /stop
+    if (parsed.command === 'start') {
+      startCliSession(user.id);
+      resetUserNav(user.id);
+      clearSelectionCache(user.id);
+      const db = getDatabase();
+      db.prepare('UPDATE projects SET is_active = 0 WHERE user_id = ?').run(user.id);
+      const freshNavCwd = getUserNavCwd(user.id);
+      return [
+        '🚀 *WA-Agent CLI Started*',
+        '',
+        `📍 *Directory*: \`${freshNavCwd}\``,
+        '📁 *Project*:   Not selected',
+        '🧠 *Agent*:     Not selected',
+        '💬 *Session*:   Not created',
+        '',
+        'Type `/menu` to explore options or `/ls` to view files.',
+      ].join('\n');
+    }
+
+    if (parsed.command === 'stop') {
+      stopCliSession(user.id);
+      clearSelectionCache(user.id);
+      if (project) {
+        closeActiveSession(project.id);
+        const db = getDatabase();
+        db.prepare('UPDATE projects SET is_active = 0 WHERE user_id = ?').run(user.id);
+      }
+      return [
+        '⏹️ *WA-Agent CLI Stopped*',
+        '',
+        'Your terminal session has ended and commands are paused.',
+        'Send `/start` anytime to begin.',
+      ].join('\n');
+    }
+
+    // 4. CLI Session Gating: /start required to execute commands
+    if (!isCliActive(user.id)) {
+      if (parsed.command === 'system' && (parsed.subcommand === 'help' || parsed.subcommand === 'status')) {
+        return await handleSystem(ctx);
+      }
+      return [
+        '⏸️ *WA-Agent CLI is stopped.*',
+        '',
+        'Type `/start` to begin your session.',
+      ].join('\n');
+    }
+
+    // 5. Handle raw numeric input (e.g. user just typing "2")
     if (parsed.command === 'select_numeric') {
       const cache = getSelectionCache(user.id);
       if (!cache) {

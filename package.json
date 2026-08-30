@@ -12,7 +12,7 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "sim": "tsx src/cli/simulator.ts",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "NODE_ENV=test tsx --test test/**/*.test.ts"
   },
   "keywords": [
     "claude",
