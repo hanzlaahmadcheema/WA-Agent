@@ -9,7 +9,7 @@ Group=wa-agent
 WorkingDirectory=/opt/wa-agent
 EnvironmentFile=/etc/wa-agent/environment
 Environment=HOME=/var/lib/wa-agent
-Environment=PATH=/opt/wa-agent/bin:/home/hanzlaahmad/.local/bin:/var/lib/wa-agent/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/opt/wa-agent/bin:/var/lib/wa-agent/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/wa-agent/bin/node /opt/wa-agent/dist/index.js
 Restart=always
 RestartSec=5
@@ -21,7 +21,7 @@ ProtectSystem=full
 ProtectHome=read-only
 
 # Writable state directory for SQLite, Baileys credentials, logs, and agent home state
-ReadWritePaths=/var/lib/wa-agent /home/hanzlaahmad
+ReadWritePaths=/var/lib/wa-agent
 
 # Resource limits
 LimitNOFILE=65535

@@ -5,10 +5,15 @@ export function spawnDetachedAgent(
   args: string[],
   cwd: string
 ): ChildProcess {
+  const homeDir = process.env.USER_HOME || process.env.DEFAULT_CWD || '/home/hanzlaahmad';
   return spawn(command, args, {
     cwd,
     detached: true, // Creates a new process group on POSIX
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      HOME: homeDir,
+    },
   });
 }
 

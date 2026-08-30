@@ -244,6 +244,19 @@ fi
 # 7. Install systemd unit and logrotate configuration
 echo "📜 [7/8] Installing systemd service unit and logrotate..."
 cp "${SOURCE_DIR}/deployment/wa-agent.service" "${SYSTEMD_UNIT}"
+
+# Dynamically append host allowed roots to ReadWritePaths in the installed service unit
+if [ -f "${ENV_FILE}" ]; then
+    ALLOWED_FROM_ENV=$(grep '^ALLOWED_ROOTS=' "${ENV_FILE}" | cut -d= -f2- | tr ',' ' ' || true)
+    if [ -n "${ALLOWED_FROM_ENV}" ]; then
+        for root in ${ALLOWED_FROM_ENV}; do
+            if [ -d "${root}" ] && ! grep -q "${root}" "${SYSTEMD_UNIT}"; then
+                sed -i "s|^ReadWritePaths=.*|& ${root}|" "${SYSTEMD_UNIT}"
+            fi
+        done
+    fi
+fi
+
 chown root:root "${SYSTEMD_UNIT}"
 chmod 644 "${SYSTEMD_UNIT}"
 
