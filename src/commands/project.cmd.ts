@@ -8,6 +8,7 @@ import {
   getActiveProject,
   setActiveProject,
   getOrCreateProject,
+  updateSelectedAgent,
 } from '../database/repositories/project.repo.js';
 import { getActiveSession } from '../database/repositories/session.repo.js';
 import { SUPPORTED_AGENTS } from './agent.cmd.js';
@@ -137,6 +138,8 @@ export async function handleProjectSelect(
   }
 
   const project = setActiveProject(ctx.user.id, selectedProjectId!);
+  updateSelectedAgent(project.id, 'none');
+  project.selected_agent = 'none';
   ctx.project = project;
 
   const activeSession = getActiveSession(project.id);

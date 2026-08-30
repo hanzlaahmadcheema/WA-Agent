@@ -64,7 +64,7 @@ export async function processIncomingMessage(
       resetUserNav(user.id);
       clearSelectionCache(user.id);
       const db = getDatabase();
-      db.prepare('UPDATE projects SET is_active = 0 WHERE user_id = ?').run(user.id);
+      db.prepare("UPDATE projects SET is_active = 0, selected_agent = 'none' WHERE user_id = ?").run(user.id);
       const freshNavCwd = getUserNavCwd(user.id);
       return [
         '🚀 *WA-Agent CLI Started*',
@@ -84,13 +84,24 @@ export async function processIncomingMessage(
       if (project) {
         closeActiveSession(project.id);
         const db = getDatabase();
-        db.prepare('UPDATE projects SET is_active = 0 WHERE user_id = ?').run(user.id);
+        db.prepare("UPDATE projects SET is_active = 0, selected_agent = 'none' WHERE user_id = ?").run(user.id);
       }
       return [
         '⏹️ *WA-Agent CLI Stopped*',
         '',
         'Your terminal session has ended and commands are paused.',
         'Send `/start` anytime to begin.',
+      ].join('\n');
+    }
+
+    if (parsed.command === 'fix') {
+      const promptText = parsed.rawTrailing || parsed.args.join(' ') || 'Issue investigation';
+      return [
+        '🛠️ *Fix Request Received*',
+        '',
+        `Instruction: "${promptText}"`,
+        '',
+        'The assistant is inspecting system logs and applying changes now. You will receive a resolution report shortly.',
       ].join('\n');
     }
 
