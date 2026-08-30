@@ -257,6 +257,22 @@ if [ -f "${ENV_FILE}" ]; then
     fi
 fi
 
+# Patch HOME in installed unit to match the configured DEFAULT_CWD (where agent binaries auth live)
+if [ -f "${ENV_FILE}" ]; then
+    CONFIGURED_HOME=$(grep '^DEFAULT_CWD=' "${ENV_FILE}" | cut -d= -f2- || true)
+    if [ -n "${CONFIGURED_HOME}" ] && [ -d "${CONFIGURED_HOME}" ]; then
+        sed -i "s|^Environment=HOME=.*|Environment=HOME=${CONFIGURED_HOME}|" "${SYSTEMD_UNIT}"
+        # Also ensure user's .local/bin is in PATH for agent binaries
+        if ! grep -q "${CONFIGURED_HOME}/.local/bin" "${SYSTEMD_UNIT}"; then
+            sed -i "s|^Environment=PATH=|Environment=PATH=${CONFIGURED_HOME}/.local/bin:|" "${SYSTEMD_UNIT}"
+        fi
+        # Ensure HOME is in ReadWritePaths
+        if ! grep -q "${CONFIGURED_HOME}" "${SYSTEMD_UNIT}"; then
+            sed -i "s|^ReadWritePaths=.*|& ${CONFIGURED_HOME}|" "${SYSTEMD_UNIT}"
+        fi
+    fi
+fi
+
 chown root:root "${SYSTEMD_UNIT}"
 chmod 644 "${SYSTEMD_UNIT}"
 
