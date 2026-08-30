@@ -4,6 +4,7 @@ import type { CommandContext } from './types.js';
 import { config } from '../config.js';
 import { resolveSafePath, isContainedInRoots } from '../security/sandbox.js';
 import { updateProjectCwd } from '../database/repositories/project.repo.js';
+import { setUserNavCwd } from '../state/user-nav.js';
 import {
   setSelectionCache,
   resolveSelectionIndex,
@@ -28,25 +29,26 @@ export async function handleNavigation(ctx: CommandContext): Promise<string> {
     case 'cd':
       return handleCd(ctx, args[0]);
     case 'up':
+    case 'back':
       return handleUp(ctx, args[0]);
     case 'tree':
       return handleTree(ctx, args[0]);
     default:
       throw new InvalidArgumentError(
         `Unknown navigation subcommand: "${subcommand}"`,
-        'Use /pwd, /ls, /cd, /up, or /tree.'
+        'Use /pwd, /ls, /cd, /back, or /tree.'
       );
   }
 }
 
 export function handlePwd(ctx: CommandContext): string {
-  return `📁 *Current Working Directory*\n\`${ctx.project.cwd}\``;
+  return `📍 Current directory:\n${ctx.navCwd}`;
 }
 
 export async function handleLs(ctx: CommandContext, requestedPath?: string): Promise<string> {
   const targetDir = requestedPath
-    ? await resolveSafePath(requestedPath, ctx.project.cwd, config.ALLOWED_ROOTS, ctx.project.root_path)
-    : ctx.project.cwd;
+    ? await resolveSafePath(requestedPath, ctx.navCwd, config.ALLOWED_ROOTS)
+    : ctx.navCwd;
 
   let stat;
   try {
@@ -99,11 +101,11 @@ export async function handleLs(ctx: CommandContext, requestedPath?: string): Pro
   if (selectionItems.length === 0) {
     lines.push('_Directory is empty._');
   } else {
-    lines.push('', '_Use `/cd <n>` or `/view <n>` to navigate._');
+    lines.push('', '_Use `/cd <n|name>` to enter a folder or `/view <n|name>` to inspect a file._');
   }
 
   // Update ephemeral selection cache
-  setSelectionCache(ctx.user.id, 'NAVIGATION_LS', ctx.project.cwd, selectionItems);
+  setSelectionCache(ctx.user.id, 'NAVIGATION_LS', ctx.navCwd, selectionItems);
 
   return lines.join('\n');
 }
@@ -116,19 +118,23 @@ export async function handleCd(ctx: CommandContext, target?: string): Promise<st
     );
   }
 
+  // Handle cd .. or /cd /back
+  if (target === '..' || target === '../') {
+    return handleUp(ctx, '1');
+  }
+
   let resolvedDir: string;
 
   // Numeric selection against latest listing
   if (/^\d+$/.test(target)) {
     const index = parseInt(target, 10);
-    const item = resolveSelectionIndex(ctx.user.id, index, ctx.project.cwd, 'dir');
+    const item = resolveSelectionIndex(ctx.user.id, index, ctx.navCwd, 'dir');
     resolvedDir = item.value;
   } else {
     resolvedDir = await resolveSafePath(
       target,
-      ctx.project.cwd,
-      config.ALLOWED_ROOTS,
-      ctx.project.root_path
+      ctx.navCwd,
+      config.ALLOWED_ROOTS
     );
   }
 
@@ -143,12 +149,16 @@ export async function handleCd(ctx: CommandContext, target?: string): Promise<st
     );
   }
 
-  // Update DB state
-  updateProjectCwd(ctx.project.id, resolvedDir);
-  ctx.project.cwd = resolvedDir;
+  // Update navigation CWD
+  setUserNavCwd(ctx.user.id, resolvedDir);
+  ctx.navCwd = resolvedDir;
 
-  // Automatically return fresh /ls of the entered directory
-  return handleLs(ctx);
+  if (ctx.project) {
+    updateProjectCwd(ctx.project.id, resolvedDir);
+    ctx.project.cwd = resolvedDir;
+  }
+
+  return `📍 Current directory:\n${resolvedDir}`;
 }
 
 export async function handleUp(ctx: CommandContext, levelsStr?: string): Promise<string> {
@@ -156,11 +166,11 @@ export async function handleUp(ctx: CommandContext, levelsStr?: string): Promise
   if (isNaN(levels) || levels < 1) {
     throw new InvalidArgumentError(
       'Levels must be a positive integer.',
-      'Usage: /up [levels] (e.g. /up or /up 2)'
+      'Usage: /back or /up [levels]'
     );
   }
 
-  let target = ctx.project.cwd;
+  let target = ctx.navCwd;
   for (let i = 0; i < levels; i++) {
     const parent = path.dirname(target);
     if (!isContainedInRoots(parent, config.ALLOWED_ROOTS)) {
@@ -169,10 +179,15 @@ export async function handleUp(ctx: CommandContext, levelsStr?: string): Promise
     target = parent;
   }
 
-  updateProjectCwd(ctx.project.id, target);
-  ctx.project.cwd = target;
+  setUserNavCwd(ctx.user.id, target);
+  ctx.navCwd = target;
 
-  return handleLs(ctx);
+  if (ctx.project) {
+    updateProjectCwd(ctx.project.id, target);
+    ctx.project.cwd = target;
+  }
+
+  return `📍 Current directory:\n${target}`;
 }
 
 export async function handleTree(ctx: CommandContext, depthStr?: string): Promise<string> {
@@ -184,7 +199,7 @@ export async function handleTree(ctx: CommandContext, depthStr?: string): Promis
     );
   }
 
-  const lines: string[] = [`🌳 *Tree: ${path.basename(ctx.project.cwd)} (depth: ${depth})*`, ''];
+  const lines: string[] = [`🌳 *Tree: ${path.basename(ctx.navCwd)} (depth: ${depth})*`, ''];
   let totalEntries = 0;
   const MAX_ENTRIES = 100;
 
@@ -211,6 +226,6 @@ export async function handleTree(ctx: CommandContext, depthStr?: string): Promis
     }
   }
 
-  await buildTree(ctx.project.cwd, 1, '');
+  await buildTree(ctx.navCwd, 1, '');
   return lines.join('\n');
 }

@@ -1,11 +1,31 @@
 import type { CommandContext } from './types.js';
+import type { Project } from '../database/types.js';
 import {
   getOrCreateProjectConfig,
   updateProjectConfig,
 } from '../database/repositories/config.repo.js';
 import { InvalidArgumentError } from '../router/errors.js';
 
+function requireProject(ctx: CommandContext): Project {
+  if (!ctx.project) {
+    throw new InvalidArgumentError(
+      'No project selected.',
+      'Select a project first with /project select <path>'
+    );
+  }
+  return ctx.project;
+}
+
 export async function handleConfig(ctx: CommandContext): Promise<string> {
+  if (!ctx.project) {
+    return [
+      '⚠️ *No project selected.*',
+      '',
+      'Select a project first:',
+      '  `/project select <path>`',
+    ].join('\n');
+  }
+
   const { subcommand, args } = ctx.parsed;
 
   if (!subcommand) {
@@ -42,7 +62,8 @@ export async function handleConfig(ctx: CommandContext): Promise<string> {
 }
 
 export function handleConfigShow(ctx: CommandContext): string {
-  const cfg = getOrCreateProjectConfig(ctx.project.id);
+  const project = requireProject(ctx);
+  const cfg = getOrCreateProjectConfig(project.id);
   const budgetStr = cfg.max_budget_usd !== null ? `$${cfg.max_budget_usd.toFixed(2)}` : 'unlimited';
   const worktreeStr = cfg.worktree_enabled ? `enabled (${cfg.worktree_branch || 'auto'})` : 'disabled';
   const mcpStr = cfg.mcp_config_path || 'default';
@@ -69,6 +90,7 @@ export function handleConfigShow(ctx: CommandContext): string {
 }
 
 export function handleConfigModel(ctx: CommandContext, modelName?: string): string {
+  const project = requireProject(ctx);
   if (!modelName) {
     throw new InvalidArgumentError('Model name required.', 'Usage: /model <sonnet | opus | haiku>');
   }
@@ -81,12 +103,13 @@ export function handleConfigModel(ctx: CommandContext, modelName?: string): stri
   };
 
   const finalModel = mapping[normalized] || modelName;
-  updateProjectConfig(ctx.project.id, { model: finalModel });
+  updateProjectConfig(project.id, { model: finalModel });
 
   return `✅ Execution model set to: \`${finalModel}\``;
 }
 
 export function handleConfigPermission(ctx: CommandContext, mode?: string): string {
+  const project = requireProject(ctx);
   if (!mode || !['plan', 'default', 'accept-all', 'bypass'].includes(mode.toLowerCase())) {
     throw new InvalidArgumentError(
       'Invalid permission mode.',
@@ -95,7 +118,7 @@ export function handleConfigPermission(ctx: CommandContext, mode?: string): stri
   }
 
   const validMode = mode.toLowerCase() as 'plan' | 'default' | 'accept-all' | 'bypass';
-  updateProjectConfig(ctx.project.id, { permission_mode: validMode });
+  updateProjectConfig(project.id, { permission_mode: validMode });
 
   return `✅ Permission mode set to: \`${validMode}\``;
 }
@@ -105,6 +128,7 @@ export function handleConfigTools(
   action?: string,
   toolNames: string[] = []
 ): string {
+  const project = requireProject(ctx);
   if (!action || !['allow', 'deny', 'reset'].includes(action.toLowerCase())) {
     throw new InvalidArgumentError(
       'Action must be allow, deny, or reset.',
@@ -113,7 +137,7 @@ export function handleConfigTools(
   }
 
   const act = action.toLowerCase();
-  const cfg = getOrCreateProjectConfig(ctx.project.id);
+  const cfg = getOrCreateProjectConfig(project.id);
   let allowed: string[] = JSON.parse(cfg.allowed_tools);
   let denied: string[] = JSON.parse(cfg.denied_tools);
 
@@ -137,7 +161,7 @@ export function handleConfigTools(
     }
   }
 
-  updateProjectConfig(ctx.project.id, {
+  updateProjectConfig(project.id, {
     allowed_tools: JSON.stringify(allowed),
     denied_tools: JSON.stringify(denied),
   });
@@ -150,6 +174,7 @@ export function handleConfigTools(
 }
 
 export function handleConfigOutput(ctx: CommandContext, format?: string): string {
+  const project = requireProject(ctx);
   if (!format || !['json', 'text', 'stream-json'].includes(format.toLowerCase())) {
     throw new InvalidArgumentError(
       'Invalid output format.',
@@ -158,12 +183,13 @@ export function handleConfigOutput(ctx: CommandContext, format?: string): string
   }
 
   const validFormat = format.toLowerCase() as 'json' | 'text' | 'stream-json';
-  updateProjectConfig(ctx.project.id, { agent_output_format: validFormat });
+  updateProjectConfig(project.id, { agent_output_format: validFormat });
 
   return `✅ Agent CLI output format set to: \`${validFormat}\``;
 }
 
 export function handleConfigTurns(ctx: CommandContext, turnsStr?: string): string {
+  const project = requireProject(ctx);
   const turns = turnsStr ? parseInt(turnsStr, 10) : NaN;
   if (isNaN(turns) || turns < 1 || turns > 50) {
     throw new InvalidArgumentError(
@@ -172,11 +198,12 @@ export function handleConfigTurns(ctx: CommandContext, turnsStr?: string): strin
     );
   }
 
-  updateProjectConfig(ctx.project.id, { max_turns: turns });
+  updateProjectConfig(project.id, { max_turns: turns });
   return `✅ Max turns set to: \`${turns}\``;
 }
 
 export function handleConfigBudget(ctx: CommandContext, budgetStr?: string): string {
+  const project = requireProject(ctx);
   if (!budgetStr) {
     throw new InvalidArgumentError(
       'Budget amount or "none" required.',
@@ -185,7 +212,7 @@ export function handleConfigBudget(ctx: CommandContext, budgetStr?: string): str
   }
 
   if (budgetStr.toLowerCase() === 'none') {
-    updateProjectConfig(ctx.project.id, { max_budget_usd: null });
+    updateProjectConfig(project.id, { max_budget_usd: null });
     return '✅ Budget cap removed (unlimited).';
   }
 
@@ -197,11 +224,12 @@ export function handleConfigBudget(ctx: CommandContext, budgetStr?: string): str
     );
   }
 
-  updateProjectConfig(ctx.project.id, { max_budget_usd: amount });
+  updateProjectConfig(project.id, { max_budget_usd: amount });
   return `✅ Budget cap set to: \`$${amount.toFixed(2)}\``;
 }
 
 export function handleConfigWorktree(ctx: CommandContext, mode?: string): string {
+  const project = requireProject(ctx);
   if (!mode || !['enable', 'disable'].includes(mode.toLowerCase())) {
     throw new InvalidArgumentError(
       'Mode must be enable or disable.',
@@ -210,12 +238,13 @@ export function handleConfigWorktree(ctx: CommandContext, mode?: string): string
   }
 
   const enabled = mode.toLowerCase() === 'enable' ? 1 : 0;
-  updateProjectConfig(ctx.project.id, { worktree_enabled: enabled });
+  updateProjectConfig(project.id, { worktree_enabled: enabled });
 
   return `🌿 Git worktree isolation: \`${enabled ? 'ENABLED' : 'DISABLED'}\``;
 }
 
 export function handleConfigMcp(ctx: CommandContext, mcpPath?: string): string {
+  const project = requireProject(ctx);
   if (!mcpPath) {
     throw new InvalidArgumentError(
       'MCP config path or "none" required.',
@@ -224,12 +253,13 @@ export function handleConfigMcp(ctx: CommandContext, mcpPath?: string): string {
   }
 
   const value = mcpPath.toLowerCase() === 'none' ? null : mcpPath;
-  updateProjectConfig(ctx.project.id, { mcp_config_path: value });
+  updateProjectConfig(project.id, { mcp_config_path: value });
 
   return `🔌 MCP Configuration: \`${value || 'DISABLED'}\``;
 }
 
 export function handleConfigRender(ctx: CommandContext, mode?: string): string {
+  const project = requireProject(ctx);
   if (!mode || !['compact', 'full', 'file'].includes(mode.toLowerCase())) {
     throw new InvalidArgumentError(
       'Render mode must be compact, full, or file.',
@@ -238,7 +268,7 @@ export function handleConfigRender(ctx: CommandContext, mode?: string): string {
   }
 
   const validMode = mode.toLowerCase() as 'compact' | 'full' | 'file';
-  updateProjectConfig(ctx.project.id, { render_mode: validMode });
+  updateProjectConfig(project.id, { render_mode: validMode });
 
   return [
     `📺 *WhatsApp Presentation Mode: ${validMode.toUpperCase()}*`,

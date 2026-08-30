@@ -3,8 +3,9 @@ import type { ParsedCommand } from '../router/lexer.js';
 
 export interface CommandContext {
   user: User;
-  project: Project;
+  project?: Project | null;
   parsed: ParsedCommand;
+  navCwd: string;
 }
 
 export type CommandHandler = (ctx: CommandContext) => Promise<string> | string;

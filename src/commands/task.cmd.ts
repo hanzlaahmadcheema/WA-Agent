@@ -19,6 +19,7 @@ import {
 } from '../router/errors.js';
 import { LIMITS } from '../security/limits.js';
 import { checkAndRecordRateLimit } from '../security/rate-limiter.js';
+import { SUPPORTED_AGENTS } from './agent.cmd.js';
 
 export async function handleTask(ctx: CommandContext): Promise<string> {
   const { subcommand, args, rawTrailing } = ctx.parsed;
@@ -57,9 +58,47 @@ export async function handleRun(ctx: CommandContext, prompt?: string): Promise<s
   // Enforce rate limiting for /run
   checkAndRecordRateLimit(ctx.user.id, 'run');
 
+  // 1. Project Gate
+  if (!ctx.project) {
+    return [
+      '⚠️ *No project selected.*',
+      '',
+      'Select a project first:',
+      '  `/project select <path>`',
+    ].join('\n');
+  }
+
+  // 2. Agent Gate
+  if (!ctx.project.selected_agent || ctx.project.selected_agent === 'none') {
+    return [
+      '⚠️ *No agent selected.*',
+      '',
+      `*Current project:* ${ctx.project.name}`,
+      '',
+      'Select an agent first:',
+      '  `/agent`',
+    ].join('\n');
+  }
+
+  // 3. Session Gate
   const activeSession = getActiveSession(ctx.project.id);
   if (!activeSession) {
-    throw new NoActiveSessionError();
+    const agentMeta = SUPPORTED_AGENTS.find((a) => a.name === ctx.project!.selected_agent);
+    const agentDisplay = agentMeta?.label || ctx.project!.selected_agent;
+
+    return [
+      '⚠️ *No session exists.*',
+      '',
+      '*Current project:*',
+      ctx.project.name,
+      '',
+      '*Agent:*',
+      agentDisplay,
+      '',
+      'Create a session first:',
+      '',
+      '  `/session create`',
+    ].join('\n');
   }
 
   const config = getOrCreateProjectConfig(ctx.project.id);
@@ -114,7 +153,7 @@ export function handleJobs(ctx: CommandContext): string {
 
   lines.push('', '_View details with `/job <id>` or `/cancel <id>`._');
 
-  setSelectionCache(ctx.user.id, 'JOB_LIST', ctx.project.cwd, selectionItems);
+  setSelectionCache(ctx.user.id, 'JOB_LIST', ctx.navCwd, selectionItems);
 
   return lines.join('\n');
 }

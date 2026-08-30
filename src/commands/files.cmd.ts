@@ -42,17 +42,18 @@ async function resolveTargetFile(
     );
   }
 
+  const currentDir = ctx.navCwd || ctx.project?.cwd || config.ALLOWED_ROOTS[0];
+
   let filePath: string;
   if (/^\d+$/.test(target)) {
     const index = parseInt(target, 10);
-    const item = resolveSelectionIndex(ctx.user.id, index, ctx.project.cwd, 'file');
+    const item = resolveSelectionIndex(ctx.user.id, index, currentDir, 'file');
     filePath = item.value;
   } else {
     filePath = await resolveSafePath(
       target,
-      ctx.project.cwd,
-      config.ALLOWED_ROOTS,
-      ctx.project.root_path
+      currentDir,
+      config.ALLOWED_ROOTS
     );
   }
 
@@ -108,7 +109,8 @@ export async function handleView(
     return `${lineNum} | ${line}`;
   });
 
-  const relativeName = path.relative(ctx.project.cwd, filePath) || path.basename(filePath);
+  const baseDir = ctx.navCwd || ctx.project?.cwd || config.ALLOWED_ROOTS[0];
+  const relativeName = path.relative(baseDir, filePath) || path.basename(filePath);
   const ext = path.extname(filePath).slice(1) || 'txt';
 
   const output: string[] = [
@@ -141,7 +143,8 @@ export async function handleHead(
 
   const content = await fs.readFile(filePath, 'utf8');
   const lines = content.split('\n').slice(0, count);
-  const relativeName = path.relative(ctx.project.cwd, filePath) || path.basename(filePath);
+  const baseDir = ctx.navCwd || ctx.project?.cwd || config.ALLOWED_ROOTS[0];
+  const relativeName = path.relative(baseDir, filePath) || path.basename(filePath);
   const ext = path.extname(filePath).slice(1) || 'txt';
 
   return [
@@ -169,7 +172,8 @@ export async function handleTail(
   const content = await fs.readFile(filePath, 'utf8');
   const allLines = content.split('\n');
   const lines = allLines.slice(Math.max(0, allLines.length - count));
-  const relativeName = path.relative(ctx.project.cwd, filePath) || path.basename(filePath);
+  const baseDir = ctx.navCwd || ctx.project?.cwd || config.ALLOWED_ROOTS[0];
+  const relativeName = path.relative(baseDir, filePath) || path.basename(filePath);
   const ext = path.extname(filePath).slice(1) || 'txt';
 
   return [
@@ -199,9 +203,10 @@ export async function handleGrep(
     );
   }
 
+  const baseDir = ctx.navCwd || ctx.project?.cwd || config.ALLOWED_ROOTS[0];
   const searchDir = subPath
-    ? await resolveSafePath(subPath, ctx.project.cwd, config.ALLOWED_ROOTS, ctx.project.root_path)
-    : ctx.project.cwd;
+    ? await resolveSafePath(subPath, baseDir, config.ALLOWED_ROOTS)
+    : baseDir;
 
   let regex: RegExp;
   try {
@@ -233,7 +238,7 @@ export async function handleGrep(
           for (let i = 0; i < lines.length; i++) {
             if (regex.test(lines[i])) {
               matches.push({
-                file: path.relative(ctx.project.cwd, fullPath),
+                file: path.relative(baseDir, fullPath),
                 line: i + 1,
                 text: lines[i].trim().slice(0, 100),
               });

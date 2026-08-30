@@ -1,10 +1,7 @@
 import { parseCommand, type ParsedCommand } from './lexer.js';
 import { authorizeUser } from '../security/authorizer.js';
-import {
-  getActiveProject,
-  getOrCreateProject,
-} from '../database/repositories/project.repo.js';
-import { config } from '../config.js';
+import { getActiveProject } from '../database/repositories/project.repo.js';
+import { getUserNavCwd } from '../state/user-nav.js';
 import {
   ControlPlaneError,
   NotFoundError,
@@ -13,6 +10,7 @@ import {
 import { handleMenu } from '../commands/menu.cmd.js';
 import { handleNavigation } from '../commands/navigation.cmd.js';
 import { handleFiles } from '../commands/files.cmd.js';
+import { handleProject } from '../commands/project.cmd.js';
 import { handleAgent } from '../commands/agent.cmd.js';
 import { handleSession } from '../commands/session.cmd.js';
 import { handleConfig } from '../commands/config.cmd.js';
@@ -36,17 +34,15 @@ export async function processIncomingMessage(
     // 1. Authorize sender
     const user = authorizeUser(senderJid, pushName);
 
-    // 2. Resolve or initialize active project
-    let project = getActiveProject(user.id);
-    if (!project) {
-      const defaultRoot = config.ALLOWED_ROOTS[0];
-      project = getOrCreateProject(user.id, defaultRoot, undefined, config.DEFAULT_AGENT);
-    }
+    // 2. Resolve active project (if selected) and terminal navigation directory
+    const project = getActiveProject(user.id);
+    const navCwd = getUserNavCwd(user.id);
 
     const ctx: CommandContext = {
       user,
       project,
       parsed,
+      navCwd,
     };
 
     cmdLogger.info(
@@ -66,9 +62,9 @@ export async function processIncomingMessage(
         const num = parseInt(parsed.args[0], 10);
         const menuMapping: Record<number, ParsedCommand> = {
           1: { raw: '/ls', command: 'navigation', subcommand: 'ls', args: [] },
-          2: { raw: '/view', command: 'files', subcommand: 'view', args: [] },
-          3: { raw: '/agents', command: 'agent', subcommand: 'list', args: [] },
-          4: { raw: '/session list', command: 'session', subcommand: 'list', args: [] },
+          2: { raw: '/project', command: 'project', args: [] },
+          3: { raw: '/agent', command: 'agent', args: [] },
+          4: { raw: '/session', command: 'session', args: [] },
           5: { raw: '/config', command: 'config', subcommand: 'show', args: [] },
           6: { raw: '/jobs', command: 'task', subcommand: 'jobs', args: [] },
           7: { raw: '/status', command: 'system', subcommand: 'status', args: [] },
@@ -104,7 +100,7 @@ export async function processIncomingMessage(
       }
 
       if (cache.source === 'SESSION_LIST') {
-        ctx.parsed = { raw: `/session resume ${parsed.args[0]}`, command: 'session', subcommand: 'resume', args: [parsed.args[0]] };
+        ctx.parsed = { raw: `/session select ${parsed.args[0]}`, command: 'session', subcommand: 'select', args: [parsed.args[0]] };
         return await dispatchCommand(ctx);
       }
 
@@ -146,6 +142,8 @@ async function dispatchCommand(ctx: CommandContext): Promise<string> {
       return await handleNavigation(ctx);
     case 'files':
       return await handleFiles(ctx);
+    case 'project':
+      return await handleProject(ctx);
     case 'agent':
       return await handleAgent(ctx);
     case 'session':

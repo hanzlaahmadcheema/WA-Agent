@@ -94,11 +94,14 @@ export function parseCommand(input: string): ParsedCommand | null {
     ls: { command: 'navigation', subcommand: 'ls' },
     cd: { command: 'navigation', subcommand: 'cd' },
     up: { command: 'navigation', subcommand: 'up' },
+    back: { command: 'navigation', subcommand: 'up' },
     tree: { command: 'navigation', subcommand: 'tree' },
     view: { command: 'files', subcommand: 'view' },
     head: { command: 'files', subcommand: 'head' },
     tail: { command: 'files', subcommand: 'tail' },
     grep: { command: 'files', subcommand: 'grep' },
+    project: { command: 'project' },
+    projects: { command: 'project', subcommand: 'list' },
     agents: { command: 'agent', subcommand: 'list' },
     agent: { command: 'agent' },
     session: { command: 'session' },
@@ -135,7 +138,7 @@ export function parseCommand(input: string): ParsedCommand | null {
       subcommand = remainingTokens[0].toLowerCase();
       args = remainingTokens.slice(1);
     }
-  } else if (['navigation', 'files', 'agent', 'session', 'config', 'task', 'system'].includes(firstToken)) {
+  } else if (['navigation', 'files', 'project', 'agent', 'session', 'config', 'task', 'system'].includes(firstToken)) {
     command = firstToken;
     if (remainingTokens.length > 0) {
       subcommand = remainingTokens[0].toLowerCase();
