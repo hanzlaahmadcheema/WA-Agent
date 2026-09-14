@@ -85,6 +85,11 @@ export function parseCommand(input: string): ParsedCommand | null {
       status: { raw: '/status', command: 'system', subcommand: 'status', args: [] },
       chats: { raw: '/chats', command: 'chats', args: [] },
       chat: { raw: '/chats', command: 'chats', args: [] },
+      diff: { raw: '/diff', command: 'git', subcommand: 'diff', args: [] },
+      push: { raw: '/push', command: 'git', subcommand: 'push', args: [] },
+      jobs: { raw: '/jobs', command: 'task', subcommand: 'jobs', args: [] },
+      cancel: { raw: '/cancel', command: 'task', subcommand: 'cancel', args: [] },
+      stop: { raw: '/stop', command: 'stop', args: [] },
       hi: { raw: '/menu', command: 'menu', args: [] },
       hello: { raw: '/menu', command: 'menu', args: [] },
       hey: { raw: '/menu', command: 'menu', args: [] },
@@ -108,6 +113,12 @@ export function parseCommand(input: string): ParsedCommand | null {
     menu: { command: 'menu' },
     chats: { command: 'chats' },
     chat: { command: 'chats' },
+    diff: { command: 'git', subcommand: 'diff' },
+    commit: { command: 'git', subcommand: 'commit' },
+    push: { command: 'git', subcommand: 'push' },
+    git: { command: 'git' },
+    send: { command: 'send' },
+    export: { command: 'send' },
     pwd: { command: 'navigation', subcommand: 'pwd' },
     ls: { command: 'navigation', subcommand: 'ls' },
     cd: { command: 'navigation', subcommand: 'cd' },
@@ -159,7 +170,7 @@ export function parseCommand(input: string): ParsedCommand | null {
       subcommand = remainingTokens[0].toLowerCase();
       args = remainingTokens.slice(1);
     }
-  } else if (['navigation', 'files', 'project', 'agent', 'session', 'config', 'task', 'system'].includes(firstToken)) {
+  } else if (['navigation', 'files', 'project', 'agent', 'session', 'config', 'task', 'system', 'git', 'send'].includes(firstToken)) {
     command = firstToken;
     if (remainingTokens.length > 0) {
       subcommand = remainingTokens[0].toLowerCase();
@@ -167,7 +178,7 @@ export function parseCommand(input: string): ParsedCommand | null {
     }
   }
 
-  // Extract rawTrailing for prompts (e.g. /run or /task run)
+  // Extract rawTrailing for prompts (e.g. /run or /task run) and commit messages
   let rawTrailing: string | undefined = undefined;
   if ((command === 'task' && subcommand === 'run') || firstToken === 'run') {
     // Find where the command prefix ends in the original string
@@ -182,6 +193,18 @@ export function parseCommand(input: string): ParsedCommand | null {
         promptText = promptText.slice(1, -1);
       }
       rawTrailing = promptText;
+    }
+  } else if ((command === 'git' && subcommand === 'commit') || firstToken === 'commit') {
+    const match = trimmed.match(/^\/(?:git\s+commit|commit)\s+(.*)$/i);
+    if (match) {
+      let commitMsg = match[1].trim();
+      if (
+        (commitMsg.startsWith('"') && commitMsg.endsWith('"')) ||
+        (commitMsg.startsWith("'") && commitMsg.endsWith("'"))
+      ) {
+        commitMsg = commitMsg.slice(1, -1);
+      }
+      rawTrailing = commitMsg;
     }
   }
 

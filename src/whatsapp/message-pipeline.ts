@@ -1,4 +1,6 @@
-import type { proto } from '@whiskeysockets/baileys';
+import fs from 'node:fs';
+import path from 'node:path';
+import { type proto, downloadMediaMessage } from '@whiskeysockets/baileys';
 import { processIncomingMessage } from '../router/command-router.js';
 import { authorizeUser, isSenderAdmin, registerAdminLid, getAllAuthorizedPhones, normalizeJid } from '../security/authorizer.js';
 import { trackInboundMessage } from '../database/repositories/message-dedup.repo.js';
@@ -7,6 +9,13 @@ import { LIMITS } from '../security/limits.js';
 import { checkAndRecordRateLimit } from '../security/rate-limiter.js';
 import { config } from '../config.js';
 import { isMessageSentByAgent } from './outbound-sender.js';
+import { transcribeAudio } from '../audio/audio-transcriber.js';
+import type { MediaPayload } from '../commands/send-file.cmd.js';
+import { isCliActive } from '../state/cli-session.js';
+import { getActiveProject } from '../database/repositories/project.repo.js';
+import { getActiveSession } from '../database/repositories/session.repo.js';
+
+export type MediaDownloader = (msg: proto.IWebMessageInfo, type: 'buffer') => Promise<Buffer>;
 
 export interface PipelineResult {
   shouldReply: boolean;
@@ -15,6 +24,7 @@ export interface PipelineResult {
   isDuplicate?: boolean;
   isUnauthorized?: boolean;
   ignoredReason?: string;
+  media?: MediaPayload;
 }
 
 const selfIdentities = new Set<string>([
@@ -60,11 +70,13 @@ export function extractMessageText(message: proto.IMessage | null | undefined): 
  * 2. Filter group chats (@g.us)
  * 3. Authorize sender JID BEFORE parsing
  * 4. Deduplicate message ID
- * 5. Route command & generate reply
+ * 5. Handle audio / image attachments
+ * 6. Route command / natural conversation & generate reply
  */
 export async function executeMessagePipeline(
   msg: proto.IWebMessageInfo,
-  resolveAdminLid?: (phone: string) => Promise<string | undefined>
+  resolveAdminLid?: (phone: string) => Promise<string | undefined>,
+  customDownloader?: MediaDownloader
 ): Promise<PipelineResult> {
   // 1. Sanity & Malformed Message Checks
   if (!msg || !msg.key) {
@@ -136,13 +148,76 @@ export async function executeMessagePipeline(
     }
   }
 
-  // 5. Extract Text & Command Routing
-  const text = extractMessageText(msg.message);
-  if (!text || !text.trim()) {
-    return { shouldReply: false, ignoredReason: 'No text content' };
+  // Media downloader instance
+  const mediaDownloader: MediaDownloader =
+    customDownloader ||
+    (async (m) => {
+      return await downloadMediaMessage(m, 'buffer', {});
+    });
+
+  // 5. Extract Text & Handle Multimodal Media (Audio Voice Notes & Images)
+  let text = extractMessageText(msg.message);
+  let audioTranscriptionNote: string | undefined = undefined;
+
+  // 5.1 Audio Voice Notes
+  if (!text && msg.message?.audioMessage) {
+    try {
+      const audioBuffer = await mediaDownloader(msg, 'buffer');
+      const mimetype = msg.message.audioMessage.mimetype || 'audio/ogg';
+      const transcription = await transcribeAudio(audioBuffer, mimetype);
+      if (transcription.success && transcription.text) {
+        text = transcription.text;
+        audioTranscriptionNote = `🎤 *Voice Note Transcribed* (${transcription.provider || 'Whisper'}):\n_"${transcription.text}"_`;
+      } else {
+        return {
+          shouldReply: true,
+          recipientJid: msg.key.remoteJid!,
+          replyText: `🎤 *Voice Note Received*\n\n⚠️ Could not transcribe audio:\n${transcription.error || 'Transcription failed.'}\n\n_Configure GROQ_API_KEY, OPENAI_API_KEY, or install whisper CLI in /etc/wa-agent/environment._`,
+        };
+      }
+    } catch (err: any) {
+      return {
+        shouldReply: true,
+        recipientJid: msg.key.remoteJid!,
+        replyText: `🎤 *Voice Note Received*\n\n❌ Failed to download audio: ${err.message}`,
+      };
+    }
   }
 
-  // 5.1 Enforce maximum message length
+  // 5.2 Image Attachments
+  if (msg.message?.imageMessage) {
+    const tmpDir = '/tmp/wa-agent-media';
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    const ext = msg.message.imageMessage.mimetype?.includes('png') ? '.png' : '.jpg';
+    const imagePath = path.join(tmpDir, `attachment_${Date.now()}${ext}`);
+
+    try {
+      const imageBuffer = await mediaDownloader(msg, 'buffer');
+      fs.writeFileSync(imagePath, imageBuffer);
+
+      const rawCaption = (msg.message.imageMessage.caption || '').trim();
+      const instruction = rawCaption || 'Please inspect this image and summarize or resolve any issues shown.';
+
+      if (rawCaption.startsWith('/run ')) {
+        text = `/run [Attached Image: ${imagePath}]\n${rawCaption.slice(5).trim()}`;
+      } else if (rawCaption.startsWith('/')) {
+        text = rawCaption;
+      } else {
+        text = `[Attached Image: ${imagePath}]\n${instruction}`;
+      }
+    } catch (err: any) {
+      console.warn('[MessagePipeline] Image download error:', err.message);
+      text = msg.message.imageMessage.caption || null;
+    }
+  }
+
+  if (!text || !text.trim()) {
+    return { shouldReply: false, ignoredReason: 'No text or supported media content' };
+  }
+
+  // 5.3 Enforce maximum message length
   if (text.length > LIMITS.MAX_MESSAGE_CHARS) {
     return {
       shouldReply: true,
@@ -151,7 +226,7 @@ export async function executeMessagePipeline(
     };
   }
 
-  // 5.2 Enforce inbound message rate limit
+  // 5.4 Enforce inbound message rate limit
   try {
     checkAndRecordRateLimit(senderJid, 'inbound');
   } catch (err: any) {
@@ -164,23 +239,54 @@ export async function executeMessagePipeline(
     }
   }
 
-  // Only route messages that start with /, are numeric selections, or are friendly keywords
+  // 5.5 Command & Natural Chat Gating
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
-  const isFriendlyKeyword = ['menu', 'help', 'start', 'status', 'chats', 'chat', 'hi', 'hello', 'hey'].includes(lower);
-  if (!trimmed.startsWith('/') && !/^\d+$/.test(trimmed) && !isFriendlyKeyword) {
+  const isFriendlyKeyword = [
+    'menu', 'help', 'start', 'status', 'chats', 'chat',
+    'hi', 'hello', 'hey', 'diff', 'push', 'jobs', 'cancel', 'stop'
+  ].includes(lower);
+
+  let isCommandOrSelection = trimmed.startsWith('/') || /^\d+$/.test(trimmed) || isFriendlyKeyword;
+
+  // Natural Conversation Mode check:
+  // If user is authorized, CLI session is active, and an active project + session exist:
+  if (!isCommandOrSelection) {
+    try {
+      const authUser = authorizeUser(senderJid, pushName);
+      if (isCliActive(authUser.id)) {
+        const activeProj = getActiveProject(authUser.id);
+        if (activeProj) {
+          const activeSess = getActiveSession(activeProj.id);
+          if (activeSess) {
+            isCommandOrSelection = true;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (!isCommandOrSelection) {
     return { shouldReply: false, ignoredReason: 'Non-command text' };
   }
 
   // 6. Execute Command via Router
-  const replyText = await processIncomingMessage(senderJid, trimmed, pushName);
-  if (!replyText) {
+  const output = await processIncomingMessage(senderJid, trimmed, pushName);
+  if (!output) {
     return { shouldReply: false, ignoredReason: 'Command returned empty reply' };
+  }
+
+  let replyText = typeof output === 'string' ? output : output.text;
+  const media = typeof output === 'string' ? undefined : output.media;
+
+  if (audioTranscriptionNote) {
+    replyText = `${audioTranscriptionNote}\n\n${replyText}`;
   }
 
   return {
     shouldReply: true,
     recipientJid: msg.key.remoteJid!,
     replyText,
+    media,
   };
 }

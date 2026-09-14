@@ -201,13 +201,36 @@ export class WhatsAppAdapter {
             const lid = res?.[0]?.lid;
             return typeof lid === 'string' ? lid : undefined;
           });
-          if (result.shouldReply && result.replyText && result.recipientJid) {
-            await sendWithRetry(
-              (jid, content, opt) => sock.sendMessage(jid, content, opt),
-              result.recipientJid,
-              { text: result.replyText },
-              { quoted: msg }
-            );
+          if (result.shouldReply && result.recipientJid) {
+            if (result.media) {
+              if (result.media.image) {
+                await sendWithRetry(
+                  (jid, content, opt) => sock.sendMessage(jid, content, opt),
+                  result.recipientJid,
+                  { image: result.media.image, caption: result.media.caption || result.replyText },
+                  { quoted: msg }
+                );
+              } else if (result.media.document) {
+                await sendWithRetry(
+                  (jid, content, opt) => sock.sendMessage(jid, content, opt),
+                  result.recipientJid,
+                  {
+                    document: result.media.document,
+                    mimetype: result.media.mimetype || 'application/octet-stream',
+                    fileName: result.media.fileName || 'file',
+                    caption: result.media.caption || result.replyText,
+                  },
+                  { quoted: msg }
+                );
+              }
+            } else if (result.replyText) {
+              await sendWithRetry(
+                (jid, content, opt) => sock.sendMessage(jid, content, opt),
+                result.recipientJid,
+                { text: result.replyText },
+                { quoted: msg }
+              );
+            }
           }
         } catch (err: any) {
           console.error('[WhatsApp] Unexpected error handling message:', err.message);

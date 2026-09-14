@@ -21,6 +21,12 @@ import {
   NotFoundError,
   JobCollisionError,
 } from '../router/errors.js';
+import {
+  isQuotaOrAuthError,
+  setQuotaFallback,
+  formatQuotaFallbackMessage,
+  type QuotaFallbackContext,
+} from './quota-fallback.js';
 
 export type JobNotificationHandler = (userId: string, message: string) => Promise<void> | void;
 
@@ -37,6 +43,7 @@ interface ActiveProcessInfo {
   stdoutCollector: StreamCollector;
   stderrCollector: StreamCollector;
   timeoutTimer: NodeJS.Timeout;
+  progressInterval?: NodeJS.Timeout;
 }
 
 const activeProcesses = new Map<number, ActiveProcessInfo>();
@@ -170,6 +177,28 @@ export async function launchJob(
   }, LIMITS.MAX_JOB_RUNTIME_MS);
   timeoutTimer.unref();
 
+  // Progress alert timer for long-running tasks (>25s)
+  const startTime = Date.now();
+  let progressAlertCount = 0;
+  const progressInterval = setInterval(() => {
+    if (!activeProcesses.has(job.id)) {
+      clearInterval(progressInterval);
+      return;
+    }
+    progressAlertCount++;
+    const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+    if (notificationHandler) {
+      notificationHandler(
+        userId,
+        `⏳ *Task #${job.id} In Progress...* (${elapsedSec}s elapsed)\nAgent is actively working on your instruction. Use \`/cancel ${job.id}\` if you wish to stop.`
+      );
+    }
+    if (progressAlertCount >= 3) {
+      clearInterval(progressInterval);
+    }
+  }, 25000);
+  progressInterval.unref();
+
   activeProcesses.set(job.id, {
     child,
     sessionId: session.id,
@@ -177,6 +206,7 @@ export async function launchJob(
     stdoutCollector,
     stderrCollector,
     timeoutTimer,
+    progressInterval,
   });
 
   child.stdout?.on('data', (chunk: Buffer) => {
@@ -189,6 +219,7 @@ export async function launchJob(
 
   child.on('close', (exitCode) => {
     clearTimeout(timeoutTimer);
+    clearInterval(progressInterval);
     activeProcesses.delete(job.id);
 
     try {
@@ -313,6 +344,19 @@ export async function launchJob(
           lines.push('', `*Stats*: ${statsTokens.join(' | ')}`);
         }
 
+        if (!isSuccess && isQuotaOrAuthError(normalized.summary || stderr)) {
+          const fallbackCtx: QuotaFallbackContext = {
+            userId,
+            projectId: project.id,
+            sessionId: session.id,
+            failedAgent: project.selected_agent,
+            prompt,
+            timestamp: Date.now(),
+          };
+          setQuotaFallback(fallbackCtx);
+          lines.push('', formatQuotaFallbackMessage(fallbackCtx));
+        }
+
         lines.push('', `_Next prompt: \`/run <instruction>\` | Raw log: \`/job ${job.id} full\`_`);
 
         notificationHandler(userId, lines.join('\n'));
@@ -353,6 +397,9 @@ export async function cancelJob(jobId: number, userId: string): Promise<void> {
   requestJobCancel(jobId);
 
   const procInfo = activeProcesses.get(jobId);
+  if (procInfo?.progressInterval) {
+    clearInterval(procInfo.progressInterval);
+  }
   if (procInfo && procInfo.child.pid) {
     await terminateProcessGroup(procInfo.child.pid);
   } else if (job.pid) {
@@ -372,6 +419,9 @@ export async function shutdownAllJobs(timeoutMs = 3000): Promise<void> {
     if (!procInfo) return;
 
     clearTimeout(procInfo.timeoutTimer);
+    if (procInfo.progressInterval) {
+      clearInterval(procInfo.progressInterval);
+    }
     const pid = procInfo.child.pid;
 
     finishJob(jobId, {

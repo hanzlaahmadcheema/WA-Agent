@@ -1,5 +1,6 @@
 import type { User, Project } from '../database/types.js';
 import type { ParsedCommand } from '../router/lexer.js';
+import type { FileSendResult } from './send-file.cmd.js';
 
 export interface CommandContext {
   user: User;
@@ -8,4 +9,5 @@ export interface CommandContext {
   navCwd: string;
 }
 
-export type CommandHandler = (ctx: CommandContext) => Promise<string> | string;
+export type CommandResult = string | FileSendResult;
+export type CommandHandler = (ctx: CommandContext) => Promise<CommandResult> | CommandResult;

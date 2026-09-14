@@ -27,7 +27,7 @@ export function isMessageSentByAgent(id?: string | null): boolean {
 export async function sendWithRetry(
   sendFn: (jid: string, content: any, options?: any) => Promise<any>,
   jid: string,
-  content: { text: string; [key: string]: any },
+  content: { text?: string; [key: string]: any },
   options: SendOptions = {}
 ): Promise<boolean> {
   const maxRetries = options.maxRetries ?? 3;

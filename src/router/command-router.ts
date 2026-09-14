@@ -17,20 +17,51 @@ import { handleConfig } from '../commands/config.cmd.js';
 import { handleTask } from '../commands/task.cmd.js';
 import { handleSystem } from '../commands/system.cmd.js';
 import { handleChats } from '../commands/chats.cmd.js';
+import { handleGit } from '../commands/git.cmd.js';
+import { handleSendFile, type FileSendResult } from '../commands/send-file.cmd.js';
+import { getQuotaFallback, clearQuotaFallback, getAlternativeAgent } from '../jobs/quota-fallback.js';
 import { getSelectionCache, clearSelectionCache } from '../state/selection-cache.js';
 import { createCorrelationLogger } from '../logger.js';
-import type { CommandContext } from '../commands/types.js';
+import type { CommandContext, CommandResult } from '../commands/types.js';
 import { isCliActive, startCliSession, stopCliSession } from '../state/cli-session.js';
 import { resetUserNav } from '../state/user-nav.js';
 import { getDatabase } from '../database/connection.js';
-import { closeActiveSession } from '../database/repositories/session.repo.js';
+import { closeActiveSession, getActiveSession, createSession } from '../database/repositories/session.repo.js';
+import { launchJob } from '../jobs/job-manager.js';
 
 export async function processIncomingMessage(
   senderJid: string,
   messageText: string,
   pushName?: string
-): Promise<string | null> {
-  const parsed = parseCommand(messageText);
+): Promise<CommandResult | null> {
+  let parsed = parseCommand(messageText);
+
+  // Natural Conversation Mode:
+  // If text doesn't start with / and is not a keyword or numeric selection,
+  // but sender has an active session, automatically route as /run prompt!
+  if (!parsed) {
+    try {
+      const authUser = authorizeUser(senderJid, pushName);
+      if (isCliActive(authUser.id)) {
+        const activeProj = getActiveProject(authUser.id);
+        if (activeProj) {
+          const activeSess = getActiveSession(activeProj.id);
+          if (activeSess) {
+            parsed = {
+              raw: messageText,
+              command: 'task',
+              subcommand: 'run',
+              args: [messageText],
+              rawTrailing: messageText,
+            };
+          }
+        }
+      }
+    } catch {
+      // Ignored if unauthorized
+    }
+  }
+
   if (!parsed) return null;
 
   const cmdLogger = createCorrelationLogger({ userId: senderJid });
@@ -64,6 +95,7 @@ export async function processIncomingMessage(
       startCliSession(user.id);
       resetUserNav(user.id);
       clearSelectionCache(user.id);
+      clearQuotaFallback(user.id);
       const db = getDatabase();
       db.prepare("UPDATE projects SET is_active = 0, selected_agent = 'none' WHERE user_id = ?").run(user.id);
       const freshNavCwd = getUserNavCwd(user.id);
@@ -82,6 +114,7 @@ export async function processIncomingMessage(
     if (parsed.command === 'stop') {
       stopCliSession(user.id);
       clearSelectionCache(user.id);
+      clearQuotaFallback(user.id);
       if (project) {
         closeActiveSession(project.id);
         const db = getDatabase();
@@ -120,6 +153,39 @@ export async function processIncomingMessage(
 
     // 5. Handle raw numeric input (e.g. user just typing "2")
     if (parsed.command === 'select_numeric') {
+      // 5.1 Check Smart Quota Fallback first
+      const quotaCtx = getQuotaFallback(user.id);
+      if (quotaCtx && project) {
+        const num = parseInt(parsed.args[0], 10);
+        const altAgent = getAlternativeAgent(quotaCtx, num);
+        if (altAgent) {
+          clearQuotaFallback(user.id);
+          clearSelectionCache(user.id);
+          const db = getDatabase();
+          db.prepare('UPDATE projects SET selected_agent = ? WHERE id = ?').run(altAgent, quotaCtx.projectId);
+          const updatedProject = getActiveProject(user.id);
+          let activeSession = getActiveSession(quotaCtx.projectId);
+          if (!activeSession) {
+            activeSession = createSession(
+              quotaCtx.projectId,
+              user.id,
+              `fallback-${altAgent}`,
+              altAgent,
+              project.cwd
+            );
+          }
+          const newJob = await launchJob(user.id, updatedProject || project, activeSession, quotaCtx.prompt);
+          return [
+            `🔄 *Switched Agent to ${altAgent.toUpperCase()}*`,
+            '',
+            `🚀 *Retrying Job #${newJob.id}* with your instruction:`,
+            `"${quotaCtx.prompt}"`,
+            '',
+            'You will receive completion updates shortly.',
+          ].join('\n');
+        }
+      }
+
       const cache = getSelectionCache(user.id);
       if (!cache) {
         // Fallback: If user types "1" to "9", treat as /menu selection
@@ -203,7 +269,7 @@ export async function processIncomingMessage(
   }
 }
 
-async function dispatchCommand(ctx: CommandContext): Promise<string> {
+async function dispatchCommand(ctx: CommandContext): Promise<CommandResult> {
   const { command } = ctx.parsed;
 
   switch (command) {
@@ -221,6 +287,10 @@ async function dispatchCommand(ctx: CommandContext): Promise<string> {
       return await handleSession(ctx);
     case 'chats':
       return await handleChats(ctx);
+    case 'git':
+      return await handleGit(ctx);
+    case 'send':
+      return await handleSendFile(ctx);
     case 'config':
       return await handleConfig(ctx);
     case 'task':

@@ -31,8 +31,8 @@ export function handleMenu(ctx: CommandContext): string {
   const userGuide = isReady
     ? [
         '✨ *AI is ready for tasks!*',
-        '👉 *Send:* `/run <your task or question>`',
-        '   _Example: `/run Explain what this project does`_',
+        '👉 *Chat naturally:* Send any question or task, voice note, or screenshot!',
+        '   _Commands: `/run <task>`, `/diff`, `/commit <msg>`, `/send <file>`_',
       ].join('\n')
     : [
         '👉 *To get started:*',
@@ -85,6 +85,12 @@ export function handleMenu(ctx: CommandContext): string {
     '  `/chats [agent]` • Open recent terminal/GUI chats',
     '  `/jobs`          • View active & recent tasks',
     '  `/cancel <id>`   • Stop a running task',
+    '',
+    '*Git & Files*',
+    '  `/diff`          • Review changed files & diffs',
+    '  `/commit <msg>`  • Commit project changes',
+    '  `/push`          • Push commits to git remote',
+    '  `/send <file|n>` • Send file or image back to WhatsApp',
     '',
     '*Session Control*',
     '  `/start` • Start or reset assistant',
