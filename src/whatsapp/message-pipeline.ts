@@ -1,6 +1,6 @@
 import type { proto } from '@whiskeysockets/baileys';
 import { processIncomingMessage } from '../router/command-router.js';
-import { authorizeUser, isSenderAdmin, registerAdminLid } from '../security/authorizer.js';
+import { authorizeUser, isSenderAdmin, registerAdminLid, getAllAuthorizedPhones } from '../security/authorizer.js';
 import { trackInboundMessage } from '../database/repositories/message-dedup.repo.js';
 import { UnauthorizedError, RateLimitedError } from '../router/errors.js';
 import { LIMITS } from '../security/limits.js';
@@ -66,9 +66,11 @@ export async function executeMessagePipeline(
   // 3. On-demand admin LID resolution: if sender is an unverified LID user and admin LID is not yet known
   if (senderJid.endsWith('@lid') && !isSenderAdmin(senderJid) && resolveAdminLid) {
     try {
-      const resolved = await resolveAdminLid(config.ADMIN_PHONE_NUMBER);
-      if (resolved) {
-        registerAdminLid(resolved);
+      for (const phone of getAllAuthorizedPhones()) {
+        const resolved = await resolveAdminLid(phone);
+        if (resolved) {
+          registerAdminLid(resolved);
+        }
       }
     } catch {
       // Resolution failure falls through to authorization check

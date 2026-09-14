@@ -25,6 +25,9 @@ async function bootstrap() {
 
   console.log(`[Init] Allowed sandbox roots: ${config.ALLOWED_ROOTS.join(', ')}`);
   console.log(`[Init] Admin phone: ${config.ADMIN_PHONE_NUMBER}`);
+  if (config.AUTHORIZED_PHONE_NUMBERS && config.AUTHORIZED_PHONE_NUMBERS.length > 0) {
+    console.log(`[Init] Additional authorized phones: ${config.AUTHORIZED_PHONE_NUMBERS.join(', ')}`);
+  }
 
   // Start HTTP health server
   if (config.HEALTH_ENABLED) {

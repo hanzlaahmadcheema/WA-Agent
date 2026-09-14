@@ -9,6 +9,7 @@ import {
   authorizeUser,
   registerAdminLid,
   clearAdminLids,
+  getAllAuthorizedPhones,
 } from '../src/security/authorizer.js';
 import { executeMessagePipeline } from '../src/whatsapp/message-pipeline.js';
 import { UnauthorizedError } from '../src/router/errors.js';
@@ -157,5 +158,50 @@ test('WhatsApp Admin Authorization & LID Resolution Suite', async (suite) => {
     assert.equal(res.isUnauthorized, true);
     assert.equal(res.shouldReply, true);
     assert.equal(res.replyText, '🛑 *Access Denied*: Unauthorized sender.');
+  });
+
+  await suite.test('8. Additional Authorized Phone Numbers: Whitelisted and dynamically resolvable', async () => {
+    const extraPhone = '888777666555';
+    const extraPhoneJid = `${extraPhone}@s.whatsapp.net`;
+    const extraLid = '888777666555123@lid';
+
+    // Before adding to authorized, extra phone is rejected
+    assert.equal(isSenderAdmin(extraPhoneJid), false);
+    assert.equal(isSenderAdmin(extraLid), false);
+
+    // Simulate adding extra phone to AUTHORIZED_PHONE_NUMBERS
+    const origAuthorized = config.AUTHORIZED_PHONE_NUMBERS;
+    (config as any).AUTHORIZED_PHONE_NUMBERS = [extraPhone];
+
+    try {
+      assert.ok(getAllAuthorizedPhones().includes(extraPhone));
+      assert.equal(isSenderAdmin(extraPhoneJid), true);
+
+      // Extra LID resolution via pipeline
+      const msg: proto.IWebMessageInfo = {
+        key: {
+          id: 'EXTRA_LID_MSG_1',
+          remoteJid: extraLid,
+          fromMe: false,
+        },
+        message: {
+          conversation: '/help',
+        },
+      };
+
+      const mockResolver = async (phone: string) => {
+        if (phone === extraPhone) {
+          return extraLid;
+        }
+        return undefined;
+      };
+
+      const res = await executeMessagePipeline(msg, mockResolver);
+      assert.equal(res.isUnauthorized, undefined);
+      assert.equal(res.shouldReply, true);
+      assert.equal(isSenderAdmin(extraLid), true);
+    } finally {
+      (config as any).AUTHORIZED_PHONE_NUMBERS = origAuthorized;
+    }
   });
 });

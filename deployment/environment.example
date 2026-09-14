@@ -7,6 +7,9 @@ NODE_ENV=production
 # Required: Administrator WhatsApp Phone Number (Digits only, e.g. 1234567890)
 ADMIN_PHONE_NUMBER=1234567890
 
+# Optional: Additional Authorized WhatsApp Phone Numbers (Comma-separated digits, e.g. 1234567890,9876543210)
+# AUTHORIZED_PHONE_NUMBERS=
+
 # Required: Allowed Sandbox Roots (comma-separated list of absolute paths)
 ALLOWED_ROOTS=/var/lib/wa-agent/projects
 

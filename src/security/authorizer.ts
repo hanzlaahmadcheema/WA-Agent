@@ -29,13 +29,25 @@ export function registerAdminLid(lid: string): void {
   try {
     const db = getDatabase();
     const now = Date.now();
-    db.prepare('UPDATE users SET is_authorized = 1, updated_at = ? WHERE id = ?').run(
+    db.prepare('UPDATE users SET is_authorized = 1, updated_at = ? WHERE id = ? OR phone_number = ?').run(
       now,
-      norm.jid
+      norm.jid,
+      norm.user
     );
   } catch {
     // Database might not be initialized yet in early lifecycle or tests
   }
+}
+
+export function getAllAuthorizedPhones(): string[] {
+  const phones = new Set<string>();
+  if (config.ADMIN_PHONE_NUMBER) {
+    phones.add(config.ADMIN_PHONE_NUMBER.trim().replace(/\D/g, ''));
+  }
+  for (const p of config.AUTHORIZED_PHONE_NUMBERS || []) {
+    if (p) phones.add(p);
+  }
+  return Array.from(phones);
 }
 
 export function getRecognizedAdminLids(): string[] {
@@ -76,8 +88,8 @@ export function normalizeJid(jid: string): NormalizedJidInfo {
 }
 
 /**
- * Checks whether a sender JID belongs to the configured administrator:
- * 1. Matches configured ADMIN_PHONE_NUMBER on @s.whatsapp.net or @c.us
+ * Checks whether a sender JID belongs to the configured administrator or authorized users:
+ * 1. Matches configured ADMIN_PHONE_NUMBER or AUTHORIZED_PHONE_NUMBERS on @s.whatsapp.net or @c.us
  * 2. Matches optional static ADMIN_LID in configuration
  * 3. Matches dynamically discovered admin LID from Baileys USync
  */
@@ -86,7 +98,7 @@ export function isSenderAdmin(senderJid: string): boolean {
 
   // 1. Phone number match for standard phone JIDs (@s.whatsapp.net, @c.us)
   if (!norm.isLid) {
-    if (norm.user === config.ADMIN_PHONE_NUMBER) {
+    if (getAllAuthorizedPhones().includes(norm.user)) {
       return true;
     }
   }

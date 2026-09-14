@@ -13,7 +13,7 @@ import { ConnectionFSM, type ConnectionState } from './connection-fsm.js';
 import { executeMessagePipeline } from './message-pipeline.js';
 import { sendWithRetry } from './outbound-sender.js';
 import { setJobNotificationHandler } from '../jobs/job-manager.js';
-import { registerAdminLid } from '../security/authorizer.js';
+import { registerAdminLid, getAllAuthorizedPhones } from '../security/authorizer.js';
 import { config } from '../config.js';
 
 export interface WhatsAppAdapterOptions {
@@ -120,21 +120,23 @@ export class WhatsAppAdapter {
           console.log('\n✅ [WhatsApp] Connected successfully! Control plane is live.');
         }
 
-        // Proactively resolve admin WhatsApp identity (both phone JID and LID)
+        // Proactively resolve admin and authorized WhatsApp identities (both phone JID and LID)
         try {
-          const results = await sock.onWhatsApp(config.ADMIN_PHONE_NUMBER);
-          if (results && results.length > 0) {
-            const adminInfo = results[0];
-            if (adminInfo.lid && typeof adminInfo.lid === 'string') {
-              registerAdminLid(adminInfo.lid);
-              if (!this.silent) {
-                console.log(`[WhatsApp] Admin LID discovered: ${adminInfo.lid}`);
+          for (const phone of getAllAuthorizedPhones()) {
+            const results = await sock.onWhatsApp(phone);
+            if (results && results.length > 0) {
+              const info = results[0];
+              if (info.lid && typeof info.lid === 'string') {
+                registerAdminLid(info.lid);
+                if (!this.silent) {
+                  console.log(`[WhatsApp] Admin/Authorized LID discovered for ${phone}: ${info.lid}`);
+                }
               }
             }
           }
         } catch (err: any) {
           if (!this.silent) {
-            console.warn(`[WhatsApp] Notice: Could not resolve admin LID on startup: ${err.message}`);
+            console.warn(`[WhatsApp] Notice: Could not resolve admin/authorized LID on startup: ${err.message}`);
           }
         }
 

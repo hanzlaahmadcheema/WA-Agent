@@ -26,8 +26,19 @@ export function upsertUser(
     ON CONFLICT(id) DO UPDATE SET
       phone_number = excluded.phone_number,
       display_name = COALESCE(excluded.display_name, users.display_name),
+      is_authorized = excluded.is_authorized,
       updated_at = excluded.updated_at
   `).run(id, phoneNumber, displayName, isAuthorized, now, now);
 
   return getUserById(id)!;
+}
+
+export function authorizeUserByIdOrPhone(identifier: string): void {
+  const db = getDatabase();
+  const now = Date.now();
+  db.prepare('UPDATE users SET is_authorized = 1, updated_at = ? WHERE id = ? OR phone_number = ?').run(
+    now,
+    identifier,
+    identifier
+  );
 }
