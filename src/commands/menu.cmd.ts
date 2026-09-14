@@ -21,10 +21,27 @@ export function handleMenu(ctx: CommandContext): string {
   }
 
   const isReady =
-    ctx.project &&
+    Boolean(ctx.project &&
     ctx.project.selected_agent &&
     ctx.project.selected_agent !== 'none' &&
-    sessionDisplay !== 'Not created';
+    sessionDisplay !== 'Not created');
+
+  const statusLine = isReady ? '🟢 Ready' : '🟡 Setup required';
+
+  const userGuide = isReady
+    ? [
+        '✨ *AI is ready for tasks!*',
+        '👉 *Send:* `/run <your task or question>`',
+        '   _Example: `/run Explain what this project does`_',
+      ].join('\n')
+    : [
+        '👉 *To get started:*',
+        !ctx.project
+          ? '   Reply *2* to choose a project folder.'
+          : !ctx.project.selected_agent || ctx.project.selected_agent === 'none'
+            ? '   Reply *3* to choose an AI agent.'
+            : '   Reply *4* to create a chat session.',
+      ].join('\n');
 
   return [
     '🤖 *WA-Agent* (Claude Automation Control Plane)',
@@ -41,31 +58,38 @@ export function handleMenu(ctx: CommandContext): string {
     '💬 *Session*',
     `  ${sessionDisplay}`,
     '',
-    '━━━━━━━━━━━━━━━━━━',
-    `*STATUS*: ${isReady ? '🟢 Ready' : '🟡 Setup required'}`,
-    '━━━━━━━━━━━━━━━━━━',
+    '━━━━━━━━━━━━━━━━━━━━',
+    `*STATUS*: ${statusLine}`,
+    '━━━━━━━━━━━━━━━━━━━━',
+    userGuide,
+    '',
+    '🔢 *Quick Menu (Reply 1-8):*',
+    '  1️⃣ 📁 *Browse Files* (`/ls`)',
+    '  2️⃣ 📦 *Choose Project* (`/project`)',
+    '  3️⃣ 🧠 *Choose AI Agent* (`/agent`)',
+    '  4️⃣ 💬 *Chat Sessions* (`/session`)',
+    '  5️⃣ ⚙️ *AI Settings* (`/config`)',
+    '  6️⃣ 📋 *Tasks & Results* (`/jobs`)',
+    '  7️⃣ 📊 *System Status* (`/status`)',
+    '  8️⃣ ❓ *Help & Guide* (`/help`)',
+    '',
     '*Navigation*',
-    '  `/cd <path>`',
-    '  `/pwd`',
-    '  `/ls [path]`',
-    '  `/back`',
+    '  `/ls [path]`   • Browse folders & files',
+    '  `/cd <path|n>` • Open folder or select file',
+    '  `/pwd`         • Current location',
+    '  `/back`        • Go up one level',
     '',
-    '*Project*',
-    '  `/project`',
-    '  `/project select <path>`',
-    '',
-    '*AI*',
-    '  `/agent`',
-    '  `/session`',
-    '  `/run <prompt>`',
-    '',
-    '*System*',
-    '  `/status`',
-    '  `/help`',
-    '  `/menu`',
+    '*AI Commands*',
+    '  `/run <prompt>` • Run any task or question',
+    '  `/jobs`         • View active & recent tasks',
+    '  `/cancel <id>`  • Stop a running task',
     '',
     '*Session Control*',
-    '  `/start`',
-    '  `/stop`',
+    '  `/start` • Start or reset assistant',
+    '  `/stop`  • Pause assistant',
+    '  `/menu`  • Re-open this menu',
+    '',
+    '💡 *Tip for non-technical users:*',
+    'Simply reply with *1* to *8* above to navigate without typing commands!',
   ].join('\n');
 }

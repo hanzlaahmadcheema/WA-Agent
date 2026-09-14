@@ -76,6 +76,20 @@ export function parseCommand(input: string): ParsedCommand | null {
   }
 
   if (!trimmed.startsWith('/')) {
+    // Friendly plain-text keywords for non-technical users
+    const lower = trimmed.toLowerCase();
+    const friendlyKeywords: Record<string, ParsedCommand> = {
+      menu: { raw: '/menu', command: 'menu', args: [] },
+      help: { raw: '/help', command: 'system', subcommand: 'help', args: [] },
+      start: { raw: '/start', command: 'start', args: [] },
+      status: { raw: '/status', command: 'system', subcommand: 'status', args: [] },
+      hi: { raw: '/menu', command: 'menu', args: [] },
+      hello: { raw: '/menu', command: 'menu', args: [] },
+      hey: { raw: '/menu', command: 'menu', args: [] },
+    };
+    if (friendlyKeywords[lower]) {
+      return friendlyKeywords[lower];
+    }
     return null;
   }
 

@@ -121,7 +121,7 @@ export async function processIncomingMessage(
     if (parsed.command === 'select_numeric') {
       const cache = getSelectionCache(user.id);
       if (!cache) {
-        // Fallback: If user types "1" to "7", treat as /menu selection
+        // Fallback: If user types "1" to "8", treat as /menu selection
         const num = parseInt(parsed.args[0], 10);
         const menuMapping: Record<number, ParsedCommand> = {
           1: { raw: '/ls', command: 'navigation', subcommand: 'ls', args: [] },
@@ -131,6 +131,7 @@ export async function processIncomingMessage(
           5: { raw: '/config', command: 'config', subcommand: 'show', args: [] },
           6: { raw: '/jobs', command: 'task', subcommand: 'jobs', args: [] },
           7: { raw: '/status', command: 'system', subcommand: 'status', args: [] },
+          8: { raw: '/help', command: 'system', subcommand: 'help', args: [] },
         };
 
         if (menuMapping[num]) {
