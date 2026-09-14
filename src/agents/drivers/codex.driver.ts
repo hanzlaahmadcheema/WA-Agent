@@ -37,11 +37,14 @@ export class CodexDriver implements AgentDriver {
         '--skip-git-repo-check',
       ];
 
-      if (
-        options.config.model &&
-        options.config.model !== 'default' &&
-        options.config.model !== 'claude-3-7-sonnet'
-      ) {
+      const isAgyOnlyModelResume =
+        !options.config.model ||
+        options.config.model === 'default' ||
+        options.config.model === 'claude-3-7-sonnet' ||
+        options.config.model.startsWith('gemini-') ||
+        options.config.model.startsWith('gpt-oss-') ||
+        options.config.model === 'claude-opus-4-6-thinking';
+      if (!isAgyOnlyModelResume) {
         args.push('-m', options.config.model);
       }
 
@@ -62,11 +65,14 @@ export class CodexDriver implements AgentDriver {
       '--skip-git-repo-check',
     ];
 
-    if (
-      options.config.model &&
-      options.config.model !== 'default' &&
-      options.config.model !== 'claude-3-7-sonnet'
-    ) {
+    const isAgyOnlyModel =
+      !options.config.model ||
+      options.config.model === 'default' ||
+      options.config.model === 'claude-3-7-sonnet' ||
+      options.config.model.startsWith('gemini-') ||
+      options.config.model.startsWith('gpt-oss-') ||
+      options.config.model === 'claude-opus-4-6-thinking';
+    if (!isAgyOnlyModel) {
       args.push('-m', options.config.model);
     }
 

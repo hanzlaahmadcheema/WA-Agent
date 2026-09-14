@@ -36,11 +36,15 @@ export class OpenCodeDriver implements AgentDriver {
     // Auto mode for non-interactive execution
     args.push('--auto');
 
-    // Optional model selection
+    // Optional model selection.
+    // OpenCode uses `providerID/modelID` format (e.g. `opencode/deepseek-v4-flash-free`).
+    // Agy-style names like `gemini-3.1-pro-high` or `claude-sonnet-4-6` are NOT valid
+    // for opencode and will cause an UnknownError. Only forward the model flag when the
+    // value looks like an opencode model ID (contains a '/').
     if (
       options.config.model &&
       options.config.model !== 'default' &&
-      options.config.model !== 'claude-3-7-sonnet'
+      options.config.model.includes('/')
     ) {
       args.push('--model', options.config.model);
     }

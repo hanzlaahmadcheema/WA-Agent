@@ -35,12 +35,19 @@ export class CopilotDriver implements AgentDriver {
       args.push('--allow-all-tools');
     }
 
-    // Optional model selection
-    if (
-      options.config.model &&
-      options.config.model !== 'default' &&
-      options.config.model !== 'claude-3-7-sonnet'
-    ) {
+    // Optional model selection.
+    // Copilot uses its own model IDs like `claude-haiku-4.5`, `gpt-5-mini`.
+    // Agy-style model names like `gemini-3.1-pro-high` are not valid for copilot.
+    // Exclude agy-only model patterns: starts with `gemini-`, or `gpt-oss-*`,
+    // or any model without a properly versioned suffix (X.Y).
+    const isAgyOnlyModel =
+      !options.config.model ||
+      options.config.model === 'default' ||
+      options.config.model === 'claude-3-7-sonnet' ||
+      options.config.model.startsWith('gemini-') ||
+      options.config.model.startsWith('gpt-oss-') ||
+      options.config.model === 'claude-opus-4-6-thinking';
+    if (!isAgyOnlyModel) {
       args.push('--model', options.config.model);
     }
 

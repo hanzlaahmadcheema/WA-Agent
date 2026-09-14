@@ -13,6 +13,7 @@ export function spawnDetachedAgent(
     env: {
       ...process.env,
       HOME: homeDir,
+      CODEX_HOME: process.env.CODEX_HOME || '/var/lib/wa-agent/.codex',
     },
   });
 }
