@@ -129,3 +129,56 @@ export function updateSessionAgentRef(sessionId: string, agentRef: string | null
   `).run(agentRef, Date.now(), sessionId);
 }
 
+export function createOrAttachNativeSession(
+  projectId: string,
+  userId: string,
+  name: string,
+  agentName: string,
+  workingDir: string,
+  nativeSessionRef: string
+): Session {
+  const db = getDatabase();
+  const now = Date.now();
+
+  // Check if a session already exists with this native ref in this project
+  const existing = db
+    .prepare('SELECT * FROM sessions WHERE project_id = ? AND agent_session_ref = ? LIMIT 1')
+    .get(projectId, nativeSessionRef) as unknown as Session | undefined;
+
+  if (existing) {
+    runTransaction(() => {
+      // Close other active sessions
+      db.prepare("UPDATE sessions SET status = 'CLOSED', last_active_at = ? WHERE project_id = ? AND status = 'ACTIVE'").run(
+        now,
+        projectId
+      );
+      // Re-activate this session
+      db.prepare("UPDATE sessions SET status = 'ACTIVE', last_active_at = ? WHERE id = ?").run(
+        now,
+        existing.id
+      );
+    });
+    return getSessionById(existing.id)!;
+  }
+
+  // Otherwise create a new session pre-bound to nativeSessionRef
+  const id = `sess_${crypto.randomBytes(4).toString('hex')}`;
+  runTransaction(() => {
+    db.prepare("UPDATE sessions SET status = 'CLOSED', last_active_at = ? WHERE project_id = ? AND status = 'ACTIVE'").run(
+      now,
+      projectId
+    );
+
+    db.prepare(`
+      INSERT INTO sessions (
+        id, project_id, user_id, name, agent_name,
+        agent_session_ref, working_dir, status, turn_count,
+        tokens_in, tokens_out, total_cost_usd, created_at, last_active_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 0, NULL, NULL, NULL, ?, ?)
+    `).run(id, projectId, userId, name, agentName, nativeSessionRef, workingDir, now, now);
+  });
+
+  return getSessionById(id)!;
+}
+
+

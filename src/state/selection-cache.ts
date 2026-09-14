@@ -7,13 +7,15 @@ export type SelectionSource =
   | 'NAVIGATION_LS'
   | 'SESSION_LIST'
   | 'AGENT_LIST'
-  | 'JOB_LIST';
+  | 'JOB_LIST'
+  | 'NATIVE_CHAT_LIST';
 
 export interface SelectionItem {
   index: number; // 1-based
   label: string; // e.g. "apps/", "package.json"
   value: string; // absolute path, session ID, agent name, or job ID
-  type: 'dir' | 'file' | 'session' | 'agent' | 'job';
+  type: 'dir' | 'file' | 'session' | 'agent' | 'job' | 'native_chat';
+  metadata?: Record<string, any>;
 }
 
 export interface UserSelectionCache {

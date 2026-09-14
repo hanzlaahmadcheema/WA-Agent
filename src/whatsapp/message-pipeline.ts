@@ -167,7 +167,7 @@ export async function executeMessagePipeline(
   // Only route messages that start with /, are numeric selections, or are friendly keywords
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
-  const isFriendlyKeyword = ['menu', 'help', 'start', 'status', 'hi', 'hello', 'hey'].includes(lower);
+  const isFriendlyKeyword = ['menu', 'help', 'start', 'status', 'chats', 'chat', 'hi', 'hello', 'hey'].includes(lower);
   if (!trimmed.startsWith('/') && !/^\d+$/.test(trimmed) && !isFriendlyKeyword) {
     return { shouldReply: false, ignoredReason: 'Non-command text' };
   }

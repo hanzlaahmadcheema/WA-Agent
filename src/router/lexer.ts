@@ -83,6 +83,8 @@ export function parseCommand(input: string): ParsedCommand | null {
       help: { raw: '/help', command: 'system', subcommand: 'help', args: [] },
       start: { raw: '/start', command: 'start', args: [] },
       status: { raw: '/status', command: 'system', subcommand: 'status', args: [] },
+      chats: { raw: '/chats', command: 'chats', args: [] },
+      chat: { raw: '/chats', command: 'chats', args: [] },
       hi: { raw: '/menu', command: 'menu', args: [] },
       hello: { raw: '/menu', command: 'menu', args: [] },
       hey: { raw: '/menu', command: 'menu', args: [] },
@@ -104,6 +106,8 @@ export function parseCommand(input: string): ParsedCommand | null {
   // Shorthand alias mappings to canonical categories
   const aliases: Record<string, { command: string; subcommand?: string }> = {
     menu: { command: 'menu' },
+    chats: { command: 'chats' },
+    chat: { command: 'chats' },
     pwd: { command: 'navigation', subcommand: 'pwd' },
     ls: { command: 'navigation', subcommand: 'ls' },
     cd: { command: 'navigation', subcommand: 'cd' },

@@ -16,6 +16,7 @@ import { handleSession } from '../commands/session.cmd.js';
 import { handleConfig } from '../commands/config.cmd.js';
 import { handleTask } from '../commands/task.cmd.js';
 import { handleSystem } from '../commands/system.cmd.js';
+import { handleChats } from '../commands/chats.cmd.js';
 import { getSelectionCache, clearSelectionCache } from '../state/selection-cache.js';
 import { createCorrelationLogger } from '../logger.js';
 import type { CommandContext } from '../commands/types.js';
@@ -121,7 +122,7 @@ export async function processIncomingMessage(
     if (parsed.command === 'select_numeric') {
       const cache = getSelectionCache(user.id);
       if (!cache) {
-        // Fallback: If user types "1" to "8", treat as /menu selection
+        // Fallback: If user types "1" to "9", treat as /menu selection
         const num = parseInt(parsed.args[0], 10);
         const menuMapping: Record<number, ParsedCommand> = {
           1: { raw: '/ls', command: 'navigation', subcommand: 'ls', args: [] },
@@ -132,6 +133,7 @@ export async function processIncomingMessage(
           6: { raw: '/jobs', command: 'task', subcommand: 'jobs', args: [] },
           7: { raw: '/status', command: 'system', subcommand: 'status', args: [] },
           8: { raw: '/help', command: 'system', subcommand: 'help', args: [] },
+          9: { raw: '/chats', command: 'chats', args: [] },
         };
 
         if (menuMapping[num]) {
@@ -177,6 +179,11 @@ export async function processIncomingMessage(
         ctx.parsed = { raw: `/job ${parsed.args[0]}`, command: 'task', subcommand: 'job', args: [parsed.args[0]] };
         return await dispatchCommand(ctx);
       }
+
+      if (cache.source === 'NATIVE_CHAT_LIST') {
+        ctx.parsed = { raw: `/chats select ${parsed.args[0]}`, command: 'chats', subcommand: 'select', args: [parsed.args[0]] };
+        return await dispatchCommand(ctx);
+      }
     }
 
     return await dispatchCommand(ctx);
@@ -212,6 +219,8 @@ async function dispatchCommand(ctx: CommandContext): Promise<string> {
       return await handleAgent(ctx);
     case 'session':
       return await handleSession(ctx);
+    case 'chats':
+      return await handleChats(ctx);
     case 'config':
       return await handleConfig(ctx);
     case 'task':
