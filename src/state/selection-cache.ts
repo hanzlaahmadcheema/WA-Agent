@@ -8,13 +8,14 @@ export type SelectionSource =
   | 'SESSION_LIST'
   | 'AGENT_LIST'
   | 'JOB_LIST'
-  | 'NATIVE_CHAT_LIST';
+  | 'NATIVE_CHAT_LIST'
+  | 'MODEL_LIST';
 
 export interface SelectionItem {
   index: number; // 1-based
   label: string; // e.g. "apps/", "package.json"
   value: string; // absolute path, session ID, agent name, or job ID
-  type: 'dir' | 'file' | 'session' | 'agent' | 'job' | 'native_chat';
+  type: 'dir' | 'file' | 'session' | 'agent' | 'job' | 'native_chat' | 'model';
   metadata?: Record<string, any>;
 }
 
@@ -62,7 +63,7 @@ export function resolveSelectionIndex(
   userId: string,
   index: number,
   currentCwd?: string,
-  expectedType?: 'dir' | 'file' | 'session' | 'agent' | 'job'
+  expectedType?: 'dir' | 'file' | 'session' | 'agent' | 'job' | 'native_chat' | 'model'
 ): SelectionItem {
   const cache = getSelectionCache(userId);
   if (!cache) {

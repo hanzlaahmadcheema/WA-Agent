@@ -5,6 +5,14 @@ import {
   updateProjectConfig,
 } from '../database/repositories/config.repo.js';
 import { InvalidArgumentError } from '../router/errors.js';
+import { fetchModelsForAgent } from '../agents/model-fetcher.js';
+import {
+  setSelectionCache,
+  clearSelectionCache,
+  resolveSelectionIndex,
+  type SelectionItem,
+} from '../state/selection-cache.js';
+import { SUPPORTED_AGENTS } from './agent.cmd.js';
 
 function requireProject(ctx: CommandContext): Project {
   if (!ctx.project) {
@@ -36,7 +44,7 @@ export async function handleConfig(ctx: CommandContext): Promise<string> {
     case 'show':
       return handleConfigShow(ctx);
     case 'model':
-      return handleConfigModel(ctx, args[0]);
+      return await handleConfigModel(ctx, args[0]);
     case 'permission':
       return handleConfigPermission(ctx, args[0]);
     case 'tools':
@@ -89,23 +97,80 @@ export function handleConfigShow(ctx: CommandContext): string {
   ].join('\n');
 }
 
-export function handleConfigModel(ctx: CommandContext, modelName?: string): string {
+export async function handleConfigModel(ctx: CommandContext, modelName?: string): Promise<string> {
   const project = requireProject(ctx);
-  if (!modelName) {
-    throw new InvalidArgumentError('Model name required.', 'Usage: /model <sonnet | opus | haiku>');
+  const currentAgent = project.selected_agent && project.selected_agent !== 'none'
+    ? project.selected_agent
+    : 'claude';
+  const cfg = getOrCreateProjectConfig(project.id);
+
+  // If no model provided or user requested 'list', show interactive numbered options menu
+  if (!modelName || modelName.toLowerCase() === 'list') {
+    const models = await fetchModelsForAgent(currentAgent);
+    const agentMeta = SUPPORTED_AGENTS.find((a) => a.name === currentAgent);
+    const agentLabel = agentMeta?.label || currentAgent;
+
+    const selectionItems: SelectionItem[] = [];
+    const lines: string[] = [
+      `🎛️ *Select AI Model* (${agentLabel})`,
+      '',
+      '*Current Model*:',
+      `  🟢 \`${cfg.model}\``,
+      '',
+      '*Available Models*:',
+    ];
+
+    models.forEach((m, idx) => {
+      const index = idx + 1;
+      const isActive = cfg.model === m.id;
+      selectionItems.push({
+        index,
+        label: m.label,
+        value: m.id,
+        type: 'model',
+      });
+      lines.push(`  ${index}. ${isActive ? '🟢' : '⚪'} *${m.label}*${isActive ? ' (Active)' : ''}`);
+      lines.push(`     \`${m.id}\``);
+    });
+
+    lines.push(
+      '',
+      `💬 _Reply with 1 to ${models.length} or type \`/model <name>\` to select model._`
+    );
+
+    setSelectionCache(ctx.user.id, 'MODEL_LIST', ctx.navCwd, selectionItems);
+    return lines.join('\n');
   }
 
-  const normalized = modelName.toLowerCase();
-  const mapping: Record<string, string> = {
-    sonnet: 'claude-3-7-sonnet',
-    opus: 'claude-3-opus',
-    haiku: 'claude-3-5-haiku',
-  };
+  // If user provided a numeric index (e.g. /model 1 or reply "1" from selection cache)
+  let finalModel = modelName;
+  if (/^\d+$/.test(modelName)) {
+    const index = parseInt(modelName, 10);
+    const item = resolveSelectionIndex(ctx.user.id, index, undefined, 'model');
+    finalModel = item.value;
+  } else {
+    const normalized = modelName.toLowerCase();
+    const mapping: Record<string, string> = {
+      sonnet: 'claude-3-7-sonnet',
+      opus: 'claude-3-opus',
+      haiku: 'claude-3-5-haiku',
+      flash: 'gemini-3.8-flash-high',
+      pro: 'gemini-3.1-pro-high',
+    };
+    finalModel = mapping[normalized] || modelName;
+  }
 
-  const finalModel = mapping[normalized] || modelName;
   updateProjectConfig(project.id, { model: finalModel });
+  clearSelectionCache(ctx.user.id);
 
-  return `✅ Execution model set to: \`${finalModel}\``;
+  return [
+    '✅ *Execution Model Updated*',
+    '',
+    `• *Agent*: \`${currentAgent}\``,
+    `• *Model*: \`${finalModel}\``,
+    '',
+    '_Ready for tasks! Ask anything or type `/run <task>`._',
+  ].join('\n');
 }
 
 export function handleConfigPermission(ctx: CommandContext, mode?: string): string {

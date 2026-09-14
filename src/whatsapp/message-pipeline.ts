@@ -244,7 +244,7 @@ export async function executeMessagePipeline(
   const lower = trimmed.toLowerCase();
   const isFriendlyKeyword = [
     'menu', 'help', 'start', 'status', 'chats', 'chat',
-    'hi', 'hello', 'hey', 'diff', 'push', 'jobs', 'cancel', 'stop'
+    'hi', 'hello', 'hey', 'diff', 'push', 'jobs', 'cancel', 'stop', 'model', 'models'
   ].includes(lower);
 
   let isCommandOrSelection = trimmed.startsWith('/') || /^\d+$/.test(trimmed) || isFriendlyKeyword;

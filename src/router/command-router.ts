@@ -200,6 +200,7 @@ export async function processIncomingMessage(
           7: { raw: '/status', command: 'system', subcommand: 'status', args: [] },
           8: { raw: '/help', command: 'system', subcommand: 'help', args: [] },
           9: { raw: '/chats', command: 'chats', args: [] },
+          10: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
         };
 
         if (menuMapping[num]) {
@@ -248,6 +249,11 @@ export async function processIncomingMessage(
 
       if (cache.source === 'NATIVE_CHAT_LIST') {
         ctx.parsed = { raw: `/chats select ${parsed.args[0]}`, command: 'chats', subcommand: 'select', args: [parsed.args[0]] };
+        return await dispatchCommand(ctx);
+      }
+
+      if (cache.source === 'MODEL_LIST') {
+        ctx.parsed = { raw: `/model ${parsed.args[0]}`, command: 'config', subcommand: 'model', args: [parsed.args[0]] };
         return await dispatchCommand(ctx);
       }
     }

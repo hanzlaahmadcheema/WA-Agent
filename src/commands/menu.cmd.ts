@@ -1,5 +1,6 @@
 import type { CommandContext } from './types.js';
 import { getActiveSession } from '../database/repositories/session.repo.js';
+import { getOrCreateProjectConfig } from '../database/repositories/config.repo.js';
 import { SUPPORTED_AGENTS } from './agent.cmd.js';
 
 export function handleMenu(ctx: CommandContext): string {
@@ -10,6 +11,14 @@ export function handleMenu(ctx: CommandContext): string {
   if (ctx.project?.selected_agent && ctx.project.selected_agent !== 'none') {
     const meta = SUPPORTED_AGENTS.find((a) => a.name === ctx.project!.selected_agent);
     agentDisplay = meta?.label || ctx.project.selected_agent;
+  }
+
+  let modelDisplay = 'Default';
+  if (ctx.project) {
+    const cfg = getOrCreateProjectConfig(ctx.project.id);
+    if (cfg.model) {
+      modelDisplay = cfg.model;
+    }
   }
 
   let sessionDisplay = 'Not created';
@@ -32,7 +41,7 @@ export function handleMenu(ctx: CommandContext): string {
     ? [
         '✨ *AI is ready for tasks!*',
         '👉 *Chat naturally:* Send any question or task, voice note, or screenshot!',
-        '   _Commands: `/run <task>`, `/diff`, `/commit <msg>`, `/send <file>`_',
+        '   _Commands: `/model`, `/run <task>`, `/diff`, `/commit <msg>`, `/send <file>`_',
       ].join('\n')
     : [
         '👉 *To get started:*',
@@ -55,6 +64,9 @@ export function handleMenu(ctx: CommandContext): string {
     '🧠 *Agent*',
     `  ${agentDisplay}`,
     '',
+    '🎛️ *Model*',
+    `  ${modelDisplay}`,
+    '',
     '💬 *Session*',
     `  ${sessionDisplay}`,
     '',
@@ -63,7 +75,7 @@ export function handleMenu(ctx: CommandContext): string {
     '━━━━━━━━━━━━━━━━━━━━',
     userGuide,
     '',
-    '🔢 *Quick Menu (Reply 1-9):*',
+    '🔢 *Quick Menu (Reply 1-10):*',
     '  1️⃣ 📁 *Browse Files* (`/ls`)',
     '  2️⃣ 📦 *Choose Project* (`/project`)',
     '  3️⃣ 🧠 *Choose AI Agent* (`/agent`)',
@@ -73,6 +85,7 @@ export function handleMenu(ctx: CommandContext): string {
     '  7️⃣ 📊 *System Status* (`/status`)',
     '  8️⃣ ❓ *Help & Guide* (`/help`)',
     '  9️⃣ 💻 *Desktop Chats* (`/chats`)',
+    '  🔟 🎛️ *Choose Model* (`/model`)',
     '',
     '*Navigation*',
     '  `/ls [path]`   • Browse folders & files',
@@ -82,6 +95,7 @@ export function handleMenu(ctx: CommandContext): string {
     '',
     '*AI Commands*',
     '  `/run <prompt>`  • Run any task or question',
+    '  `/model [name]`  • Switch model for current agent',
     '  `/chats [agent]` • Open recent terminal/GUI chats',
     '  `/jobs`          • View active & recent tasks',
     '  `/cancel <id>`   • Stop a running task',
@@ -98,6 +112,6 @@ export function handleMenu(ctx: CommandContext): string {
     '  `/menu`  • Re-open this menu',
     '',
     '💡 *Tip for non-technical users:*',
-    'Simply reply with *1* to *9* above to navigate without typing commands!',
+    'Simply reply with *1* to *10* above to navigate without typing commands!',
   ].join('\n');
 }
