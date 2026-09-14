@@ -120,7 +120,7 @@ export function updateSessionMetrics(
   `).run(newTurns, newTokensIn, newTokensOut, newCost, Date.now(), sessionId);
 }
 
-export function updateSessionAgentRef(sessionId: string, agentRef: string): void {
+export function updateSessionAgentRef(sessionId: string, agentRef: string | null): void {
   const db = getDatabase();
   db.prepare(`
     UPDATE sessions

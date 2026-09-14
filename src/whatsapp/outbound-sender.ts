@@ -4,6 +4,22 @@ export interface SendOptions {
   quoted?: any;
 }
 
+const sentMessageIds = new Set<string>();
+
+export function markMessageAsSentByAgent(id?: string | null): void {
+  if (!id) return;
+  sentMessageIds.add(id);
+  if (sentMessageIds.size > 5000) {
+    const first = sentMessageIds.values().next().value;
+    if (first) sentMessageIds.delete(first);
+  }
+}
+
+export function isMessageSentByAgent(id?: string | null): boolean {
+  if (!id) return false;
+  return sentMessageIds.has(id);
+}
+
 /**
  * Dispatches an outbound WhatsApp message with exponential backoff retries.
  * Only the message delivery is retried on transient failures, never the command itself.
@@ -19,7 +35,10 @@ export async function sendWithRetry(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await sendFn(jid, content, { quoted: options.quoted });
+      const res = await sendFn(jid, content, { quoted: options.quoted });
+      if (res?.key?.id) {
+        markMessageAsSentByAgent(res.key.id);
+      }
       return true;
     } catch (err: any) {
       if (attempt === maxRetries) {

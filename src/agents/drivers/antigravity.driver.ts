@@ -33,8 +33,12 @@ export class AntigravityDriver implements AgentDriver {
     const args: string[] = [this.binaryName, '-p', options.prompt, '--output-format', 'json'];
 
     // Optional model selection
-    if (options.config.model && options.config.model !== 'default' && options.config.model !== 'claude-3-7-sonnet') {
-      args.push('--model', options.config.model);
+    if (options.config.model && options.config.model !== 'default') {
+      if (options.config.model === 'claude-3-7-sonnet') {
+        args.push('--model', 'claude-sonnet-4-6');
+      } else {
+        args.push('--model', options.config.model);
+      }
     }
 
     // Session resume via conversation ID
@@ -115,6 +119,7 @@ export class AntigravityDriver implements AgentDriver {
 
       const status = typeof parsed.status === 'string' ? parsed.status.toUpperCase() : '';
       const responseText = typeof parsed.response === 'string' ? parsed.response.trim() : '';
+      const errorText = typeof parsed.error === 'string' ? parsed.error.trim() : '';
 
       // Critical Rule: Never treat exit code 0 alone as success. Validate Antigravity's result status.
       if (exitCode === 0 && status === 'SUCCESS') {
@@ -123,8 +128,9 @@ export class AntigravityDriver implements AgentDriver {
       } else {
         isSuccess = false;
         const failureStatus = status || (exitCode !== 0 ? `EXIT_CODE_${exitCode}` : 'UNKNOWN_FAILURE');
-        summary = responseText
-          ? `[${failureStatus}] ${responseText}`
+        const detail = errorText || responseText;
+        summary = detail
+          ? `[${failureStatus}] ${detail}`
           : `Task failed with status: ${failureStatus}`;
       }
     } else {

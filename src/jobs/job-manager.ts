@@ -226,9 +226,13 @@ export async function launchJob(
       const isSuccess = exitCode === 0 && normalized.isSuccess !== false;
 
       // Update session's agent reference if the agent returns one (e.g. Antigravity conversation_id)
-      if (normalized.conversationId && session.agent_session_ref !== normalized.conversationId) {
+      if (isSuccess && normalized.conversationId && session.agent_session_ref !== normalized.conversationId) {
         updateSessionAgentRef(session.id, normalized.conversationId);
         session.agent_session_ref = normalized.conversationId;
+      } else if (!isSuccess && normalized.summary && normalized.summary.toLowerCase().includes('quota')) {
+        // Clear dead conversation ref so next prompt starts fresh instead of failing continuously
+        updateSessionAgentRef(session.id, null);
+        session.agent_session_ref = null;
       }
 
       const finished = finishJob(job.id, {

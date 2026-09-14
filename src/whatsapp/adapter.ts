@@ -10,7 +10,7 @@ import pino from 'pino';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ConnectionFSM, type ConnectionState } from './connection-fsm.js';
-import { executeMessagePipeline } from './message-pipeline.js';
+import { executeMessagePipeline, registerSelfIdentity } from './message-pipeline.js';
 import { sendWithRetry } from './outbound-sender.js';
 import { setJobNotificationHandler } from '../jobs/job-manager.js';
 import { registerAdminLid, getAllAuthorizedPhones } from '../security/authorizer.js';
@@ -116,6 +116,12 @@ export class WhatsAppAdapter {
 
       if (connection === 'open') {
         this.fsm.onOpen();
+        if (sock.user) {
+          registerSelfIdentity(sock.user.id);
+          if ((sock.user as any).lid) {
+            registerSelfIdentity((sock.user as any).lid);
+          }
+        }
         if (!this.silent) {
           console.log('\n✅ [WhatsApp] Connected successfully! Control plane is live.');
         }
