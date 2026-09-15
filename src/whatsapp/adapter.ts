@@ -15,6 +15,8 @@ import { sendWithRetry } from './outbound-sender.js';
 import { setJobNotificationHandler } from '../jobs/job-manager.js';
 import { registerAdminLid, getAllAuthorizedPhones } from '../security/authorizer.js';
 import { config } from '../config.js';
+import { startReminderScheduler, stopReminderScheduler } from '../reminders/reminder-scheduler.js';
+import { ensureRemindersTable } from '../reminders/reminder-repo.js';
 
 export interface WhatsAppAdapterOptions {
   authDir?: string;
@@ -39,6 +41,9 @@ export class WhatsAppAdapter {
     setJobNotificationHandler(async (userId: string, message: string) => {
       await this.deliverNotification(userId, message);
     });
+
+    // Ensure reminders SQLite table exists (additive migration, safe to call every boot)
+    ensureRemindersTable();
   }
 
   public getConnectionState(): ConnectionState {
@@ -147,6 +152,11 @@ export class WhatsAppAdapter {
         }
 
         await this.flushPendingNotifications();
+
+        // Start reminder scheduler (idempotent — won't double-start)
+        startReminderScheduler(async (jid, text) => {
+          await sendWithRetry(sock.sendMessage.bind(sock), jid, { text });
+        });
       } else if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
         const closeResult = this.fsm.onClose(statusCode);

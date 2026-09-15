@@ -92,6 +92,7 @@ export function parseCommand(input: string): ParsedCommand | null {
       stop: { raw: '/stop', command: 'stop', args: [] },
       model: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
       models: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
+      reminders: { raw: '/reminders', command: 'remind', subcommand: 'list', args: [] },
       hi: { raw: '/menu', command: 'menu', args: [] },
       hello: { raw: '/menu', command: 'menu', args: [] },
       hey: { raw: '/menu', command: 'menu', args: [] },
@@ -157,6 +158,8 @@ export function parseCommand(input: string): ParsedCommand | null {
     start: { command: 'start' },
     stop: { command: 'stop' },
     fix: { command: 'fix' },
+    remind: { command: 'remind' },
+    reminders: { command: 'remind', subcommand: 'list' },
   };
 
   let command = firstToken;
@@ -198,7 +201,7 @@ export function parseCommand(input: string): ParsedCommand | null {
       rawTrailing = promptText;
     }
   } else if ((command === 'git' && subcommand === 'commit') || firstToken === 'commit') {
-    const match = trimmed.match(/^\/(?:git\s+commit|commit)\s+(.*)$/i);
+    const match = trimmed.match(/^\/(?:git\s+commit|commit)\s+(.*)/i);
     if (match) {
       let commitMsg = match[1].trim();
       if (
@@ -209,6 +212,9 @@ export function parseCommand(input: string): ParsedCommand | null {
       }
       rawTrailing = commitMsg;
     }
+  } else if (command === 'remind') {
+    const match = trimmed.match(/^\/(?:remind|reminders?)\s+(.*)/i);
+    if (match) rawTrailing = match[1].trim();
   }
 
   return {

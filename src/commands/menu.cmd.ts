@@ -52,7 +52,7 @@ export function handleMenu(ctx: CommandContext): string {
             : '   Reply *4* to create a chat session.',
       ].join('\n');
 
-  return [
+  const lines = [
     '🤖 *WA-Agent* (Claude Automation Control Plane)',
     '',
     '📍 *Directory*',
@@ -75,7 +75,7 @@ export function handleMenu(ctx: CommandContext): string {
     '━━━━━━━━━━━━━━━━━━━━',
     userGuide,
     '',
-    '🔢 *Quick Menu (Reply 1-10):*',
+    '🔢 *Quick Menu (Reply 1-11):*',
     '  1️⃣ 📁 *Browse Files* (`/ls`)',
     '  2️⃣ 📦 *Choose Project* (`/project`)',
     '  3️⃣ 🧠 *Choose AI Agent* (`/agent`)',
@@ -86,6 +86,7 @@ export function handleMenu(ctx: CommandContext): string {
     '  8️⃣ ❓ *Help & Guide* (`/help`)',
     '  9️⃣ 💻 *Desktop Chats* (`/chats`)',
     '  🔟 🎛️ *Choose Model* (`/model`)',
+    '  1️⃣1️⃣ ⏰ *Reminders* (`/reminders`)',
     '',
     '*Navigation*',
     '  `/ls [path]`   • Browse folders & files',
@@ -106,12 +107,20 @@ export function handleMenu(ctx: CommandContext): string {
     '  `/push`          • Push commits to git remote',
     '  `/send <file|n>` • Send file or image back to WhatsApp',
     '',
+    '*Reminders* _(no agent needed!)_',
+    '  `/remind 30m check the build`',
+    '  `/remind at 5pm push the release`',
+    '  `/remind tomorrow 9am standup`',
+    '  `/reminders`     • View all pending reminders',
+    '  `remind me to X at 5pm`  _(plain text works too!)_',
+    '',
     '*Session Control*',
     '  `/start` • Start or reset assistant',
     '  `/stop`  • Pause assistant',
     '  `/menu`  • Re-open this menu',
     '',
     '💡 *Tip for non-technical users:*',
-    'Simply reply with *1* to *10* above to navigate without typing commands!',
-  ].join('\n');
+    'Simply reply with *1* to *11* above to navigate without typing commands!',
+  ];
+  return lines.join('\n');
 }

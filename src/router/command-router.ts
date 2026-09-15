@@ -19,6 +19,9 @@ import { handleSystem } from '../commands/system.cmd.js';
 import { handleChats } from '../commands/chats.cmd.js';
 import { handleGit } from '../commands/git.cmd.js';
 import { handleSendFile, type FileSendResult } from '../commands/send-file.cmd.js';
+import { handleRemind } from '../commands/remind.cmd.js';
+import { handleReminderReply } from '../reminders/reminder-scheduler.js';
+import { parseReminder } from '../reminders/reminder-parser.js';
 import { getQuotaFallback, clearQuotaFallback, getAlternativeAgent } from '../jobs/quota-fallback.js';
 import { getSelectionCache, clearSelectionCache } from '../state/selection-cache.js';
 import { createCorrelationLogger } from '../logger.js';
@@ -35,6 +38,17 @@ export async function processIncomingMessage(
   pushName?: string
 ): Promise<CommandResult | null> {
   let parsed = parseCommand(messageText);
+
+  // Natural "remind me" detection — works even without /start session
+  // e.g. "remind me to push at 5pm"
+  if (!parsed && /^remind\s+me\b/i.test(messageText.trim())) {
+    parsed = {
+      raw: messageText,
+      command: 'remind',
+      args: [],
+      rawTrailing: messageText.trim(),
+    };
+  }
 
   // Natural Conversation Mode:
   // If text doesn't start with / and is not a keyword or numeric selection,
@@ -140,6 +154,18 @@ export async function processIncomingMessage(
     }
 
     // 4. CLI Session Gating: /start required to execute commands
+    // Exceptions: /remind works without a session (it's a personal utility),
+    // and snooze/cancel replies to a fired reminder are handled here too.
+    if (parsed.command === 'remind') {
+      return await handleRemind(ctx);
+    }
+
+    // Intercept snooze/cancel replies for fired reminders (e.g. "snooze 15m", "cancel")
+    const reminderReply = handleReminderReply(user.id, messageText.trim());
+    if (reminderReply !== null) {
+      return reminderReply;
+    }
+
     if (!isCliActive(user.id)) {
       if (parsed.command === 'system' && (parsed.subcommand === 'help' || parsed.subcommand === 'status')) {
         return await handleSystem(ctx);
@@ -201,6 +227,7 @@ export async function processIncomingMessage(
           8: { raw: '/help', command: 'system', subcommand: 'help', args: [] },
           9: { raw: '/chats', command: 'chats', args: [] },
           10: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
+          11: { raw: '/reminders', command: 'remind', subcommand: 'list', args: [] },
         };
 
         if (menuMapping[num]) {
@@ -297,6 +324,8 @@ async function dispatchCommand(ctx: CommandContext): Promise<CommandResult> {
       return await handleGit(ctx);
     case 'send':
       return await handleSendFile(ctx);
+    case 'remind':
+      return await handleRemind(ctx);
     case 'config':
       return await handleConfig(ctx);
     case 'task':
