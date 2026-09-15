@@ -168,7 +168,7 @@ export async function executeMessagePipeline(
 
   // 5. Extract Text & Handle Multimodal Media (Audio Voice Notes & Images)
   let text = extractMessageText(msg.message);
-  let audioTranscriptionNote: string | undefined = undefined;
+  let isVoiceNote = false;
 
   // 5.1 Audio Voice Notes
   if (!text && msg.message?.audioMessage) {
@@ -177,8 +177,17 @@ export async function executeMessagePipeline(
       const mimetype = msg.message.audioMessage.mimetype || 'audio/ogg';
       const transcription = await transcribeAudio(audioBuffer, mimetype);
       if (transcription.success && transcription.text) {
-        text = transcription.text;
-        audioTranscriptionNote = `🎤 *Voice Note Transcribed* (${transcription.provider || 'Whisper'}):\n_"${transcription.text}"_`;
+        let raw = transcription.text.trim();
+        // Remove leading colon if user said ":Hello"
+        if (raw.startsWith(':')) {
+          raw = raw.slice(1).trim();
+        }
+        // Normalize single-word trailing period (e.g. "Hello." -> "Hello")
+        if (/^[A-Za-z0-9\s]+[.]$/.test(raw)) {
+          raw = raw.slice(0, -1).trim();
+        }
+        text = raw;
+        isVoiceNote = true;
       } else {
         return {
           shouldReply: true,
@@ -253,9 +262,46 @@ export async function executeMessagePipeline(
   // 5.5 Command & Natural Chat Gating
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
+
+  // A. Voice-to-Text Dictation Mode:
+  // If the user spoke a voice note and did not speak an explicit slash command or reminder,
+  // return the transcribed text directly as a clean message ("no other thing").
+  if (isVoiceNote) {
+    const isExplicitCommand =
+      trimmed.startsWith('/') || /^\d+$/.test(trimmed) || /^remind\b/i.test(trimmed);
+    if (!isExplicitCommand) {
+      return {
+        shouldReply: true,
+        recipientJid: msg.key.remoteJid!,
+        replyText: trimmed,
+      };
+    }
+  }
+
+  // B. Explicit echo prefix e.g. ":Hello"
+  if (trimmed.startsWith(':')) {
+    const echo = trimmed.slice(1).trim();
+    if (echo) {
+      return {
+        shouldReply: true,
+        recipientJid: msg.key.remoteJid!,
+        replyText: echo,
+      };
+    }
+  }
+
+  // C. Friendly greetings: return "Hello" directly rather than dumping the full control plane menu
+  if (['hello', 'hi', 'hey'].includes(lower)) {
+    return {
+      shouldReply: true,
+      recipientJid: msg.key.remoteJid!,
+      replyText: 'Hello',
+    };
+  }
+
   const isFriendlyKeyword = [
     'menu', 'help', 'start', 'status', 'chats', 'chat',
-    'hi', 'hello', 'hey', 'diff', 'push', 'jobs', 'cancel', 'stop', 'model', 'models'
+    'diff', 'push', 'jobs', 'cancel', 'stop', 'model', 'models', 'reminders'
   ].includes(lower);
 
   let isCommandOrSelection = trimmed.startsWith('/') || /^\d+$/.test(trimmed) || isFriendlyKeyword;
@@ -287,12 +333,8 @@ export async function executeMessagePipeline(
     return { shouldReply: false, ignoredReason: 'Command returned empty reply' };
   }
 
-  let replyText = typeof output === 'string' ? output : output.text;
+  const replyText = typeof output === 'string' ? output : output.text;
   const media = typeof output === 'string' ? undefined : output.media;
-
-  if (audioTranscriptionNote) {
-    replyText = `${audioTranscriptionNote}\n\n${replyText}`;
-  }
 
   return {
     shouldReply: true,

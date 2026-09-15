@@ -93,9 +93,6 @@ export function parseCommand(input: string): ParsedCommand | null {
       model: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
       models: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
       reminders: { raw: '/reminders', command: 'remind', subcommand: 'list', args: [] },
-      hi: { raw: '/menu', command: 'menu', args: [] },
-      hello: { raw: '/menu', command: 'menu', args: [] },
-      hey: { raw: '/menu', command: 'menu', args: [] },
     };
     if (friendlyKeywords[lower]) {
       return friendlyKeywords[lower];

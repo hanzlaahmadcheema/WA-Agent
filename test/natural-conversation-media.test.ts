@@ -95,4 +95,26 @@ test('Natural Conversation & Multimodal Media Suite', async (suite) => {
     assert.match(res.replyText!, /Voice Note Received/);
     assert.match(res.replyText!, /Could not transcribe audio|transcription engine/);
   });
+
+  await suite.test('5. Greeting "hello" replies with only "Hello" (no menu dump)', async () => {
+    const rawMsg: proto.IWebMessageInfo = {
+      key: { id: 'MSG_HELLO_1', remoteJid: TEST_JID },
+      message: { conversation: 'hello' },
+    };
+
+    const res = await executeMessagePipeline(rawMsg);
+    assert.equal(res.shouldReply, true);
+    assert.equal(res.replyText, 'Hello');
+  });
+
+  await suite.test('6. Explicit colon echo ":Hello" replies with only "Hello"', async () => {
+    const rawMsg: proto.IWebMessageInfo = {
+      key: { id: 'MSG_COLON_HELLO', remoteJid: TEST_JID },
+      message: { conversation: ':Hello' },
+    };
+
+    const res = await executeMessagePipeline(rawMsg);
+    assert.equal(res.shouldReply, true);
+    assert.equal(res.replyText, 'Hello');
+  });
 });
