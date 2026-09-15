@@ -1,9 +1,15 @@
+import dns from 'node:dns';
 import { config } from './config.js';
 import { initDatabase } from './database/connection.js';
 import { startWhatsAppClient } from './whatsapp/client.js';
 import { startHealthServer, registerWhatsAppStateProvider } from './health.js';
 import { executeGracefulShutdown } from './shutdown.js';
 import { logger } from './logger.js';
+
+// Prioritize IPv4 to avoid ENETUNREACH errors on hosts without IPv6 routing when connecting to WhatsApp CDN
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
 
 async function bootstrap() {
   console.log('═══════════════════════════════════════════════════════════════');

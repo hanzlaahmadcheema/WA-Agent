@@ -148,11 +148,22 @@ export async function executeMessagePipeline(
     }
   }
 
-  // Media downloader instance
+  // Media downloader instance with retry capability for transient network failures
   const mediaDownloader: MediaDownloader =
     customDownloader ||
     (async (m) => {
-      return await downloadMediaMessage(m, 'buffer', {});
+      let lastErr: any;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          return await downloadMediaMessage(m, 'buffer', {});
+        } catch (e: any) {
+          lastErr = e;
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      }
+      throw lastErr;
     });
 
   // 5. Extract Text & Handle Multimodal Media (Audio Voice Notes & Images)
