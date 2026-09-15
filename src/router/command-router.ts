@@ -39,9 +39,9 @@ export async function processIncomingMessage(
 ): Promise<CommandResult | null> {
   let parsed = parseCommand(messageText);
 
-  // Natural "remind me" detection — works even without /start session
-  // e.g. "remind me to push at 5pm"
-  if (!parsed && /^remind\s+me\b/i.test(messageText.trim())) {
+  // Natural reminder detection — works even without /start session
+  // e.g. "remind me to push at 5pm", "remind every day at 9am", "remind in 30s"
+  if (!parsed && /^remind\b/i.test(messageText.trim())) {
     parsed = {
       raw: messageText,
       command: 'remind',
