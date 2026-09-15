@@ -26,6 +26,8 @@ export async function transcribeAudio(
   fs.writeFileSync(filePath, audioBuffer);
 
   try {
+    let lastProviderError: string | undefined;
+
     // 1. Try Groq Whisper API (Fastest and free/low-cost)
     const groqKey = process.env.GROQ_API_KEY;
     if (groqKey) {
@@ -40,6 +42,7 @@ export async function transcribeAudio(
           return { success: true, text, provider: 'Groq Whisper' };
         }
       } catch (e: any) {
+        lastProviderError = `Groq Whisper: ${e.message}`;
         console.warn('[AudioTranscriber] Groq API transcription error:', e.message);
       }
     }
@@ -58,6 +61,7 @@ export async function transcribeAudio(
           return { success: true, text, provider: 'OpenAI Whisper' };
         }
       } catch (e: any) {
+        lastProviderError = `OpenAI Whisper: ${e.message}`;
         console.warn('[AudioTranscriber] OpenAI API transcription error:', e.message);
       }
     }
@@ -82,6 +86,7 @@ export async function transcribeAudio(
     return {
       success: false,
       error:
+        lastProviderError ||
         'No audio transcription engine configured.\nSet `GROQ_API_KEY`, `OPENAI_API_KEY`, or install `whisper` CLI in `/etc/wa-agent/environment`.',
     };
   } finally {
@@ -99,34 +104,56 @@ async function transcribeViaOpenAiCompatibleApi(
   apiKey: string,
   model: string
 ): Promise<string | null> {
+  const cleanKey = apiKey.replace(/^["']|["']$/g, '').trim();
+
+  // 1. Primary: curl -4 (forces IPv4, handles multipart streaming natively, avoids Node IPv6 dual-stack resets)
+  try {
+    const { stdout } = await execFileAsync(
+      'curl',
+      [
+        '-4',
+        '-s',
+        '--max-time',
+        '30',
+        '-H',
+        `Authorization: Bearer ${cleanKey}`,
+        '-F',
+        `file=@${filePath}`,
+        '-F',
+        `model=${model}`,
+        endpoint,
+      ],
+      { timeout: 35000 }
+    );
+    if (stdout) {
+      const json = JSON.parse(stdout);
+      if (json.text) {
+        return json.text.trim();
+      }
+      if (json.error) {
+        throw new Error(json.error.message || JSON.stringify(json.error));
+      }
+    }
+  } catch (curlErr: any) {
+    console.warn('[AudioTranscriber] curl transport error, attempting fetch fallback:', curlErr.message);
+  }
+
+  // 2. Fallback: native fetch
   const fileData = fs.readFileSync(filePath);
   const boundary = '----WebKitFormBoundary' + Math.random().toString(16).slice(2);
-
   const filename = path.basename(filePath);
-  const parts: Buffer[] = [];
-
-  // Model part
-  parts.push(
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n${model}\r\n`
-    )
-  );
-
-  // File part
-  parts.push(
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: audio/ogg\r\n\r\n`
-    )
-  );
-  parts.push(fileData);
-  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
-
+  const parts: Buffer[] = [
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n${model}\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: audio/ogg\r\n\r\n`),
+    fileData,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ];
   const body = Buffer.concat(parts);
 
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${cleanKey}`,
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
     },
     body,
