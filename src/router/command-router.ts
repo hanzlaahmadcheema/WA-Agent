@@ -1,11 +1,12 @@
 import { parseCommand, type ParsedCommand } from './lexer.js';
-import { authorizeUser } from '../security/authorizer.js';
+import { authorizeUser, getOrCreateUser } from '../security/authorizer.js';
 import { getActiveProject } from '../database/repositories/project.repo.js';
 import { getUserNavCwd } from '../state/user-nav.js';
 import {
   ControlPlaneError,
   NotFoundError,
   InvalidArgumentError,
+  UnauthorizedError,
 } from './errors.js';
 import { handleMenu } from '../commands/menu.cmd.js';
 import { handleNavigation } from '../commands/navigation.cmd.js';
@@ -20,6 +21,7 @@ import { handleChats } from '../commands/chats.cmd.js';
 import { handleGit } from '../commands/git.cmd.js';
 import { handleSendFile, type FileSendResult } from '../commands/send-file.cmd.js';
 import { handleRemind } from '../commands/remind.cmd.js';
+import { handleSchedule } from '../commands/schedule.cmd.js';
 import { handleReminderReply } from '../reminders/reminder-scheduler.js';
 import { parseReminder } from '../reminders/reminder-parser.js';
 import { getQuotaFallback, clearQuotaFallback, getAlternativeAgent } from '../jobs/quota-fallback.js';
@@ -81,8 +83,17 @@ export async function processIncomingMessage(
   const cmdLogger = createCorrelationLogger({ userId: senderJid });
 
   try {
-    // 1. Authorize sender
-    const user = authorizeUser(senderJid, pushName);
+    // 1. Authorize sender or permit public commands
+    const { user, isAuthorized } = getOrCreateUser(senderJid, pushName);
+    const isPublic =
+      parsed.command === 'schedule' ||
+      parsed.command === 'remind' ||
+      (parsed.command === 'system' && (parsed.subcommand === 'ping' || parsed.subcommand === 'time')) ||
+      (parsed.command === 'select_numeric' && (parsed.args[0] === '11' || parsed.args[0] === '12'));
+
+    if (!isAuthorized && !isPublic) {
+      throw new UnauthorizedError();
+    }
 
     // 2. Resolve active project (if selected) and terminal navigation directory
     const project = getActiveProject(user.id);
@@ -160,6 +171,21 @@ export async function processIncomingMessage(
       return await handleRemind(ctx);
     }
 
+    if (parsed.command === 'schedule') {
+      return await handleSchedule(ctx);
+    }
+
+    if (parsed.command === 'select_numeric' && (parsed.args[0] === '11' || parsed.args[0] === '12')) {
+      if (parsed.args[0] === '11') {
+        ctx.parsed = { raw: '/reminders', command: 'remind', subcommand: 'list', args: [] };
+        return await handleRemind(ctx);
+      }
+      if (parsed.args[0] === '12') {
+        ctx.parsed = { raw: '/schedule', command: 'schedule', args: [] };
+        return await handleSchedule(ctx);
+      }
+    }
+
     // Intercept snooze/cancel replies for fired reminders (e.g. "snooze 15m", "cancel")
     const reminderReply = handleReminderReply(user.id, messageText.trim());
     if (reminderReply !== null) {
@@ -167,7 +193,13 @@ export async function processIncomingMessage(
     }
 
     if (!isCliActive(user.id)) {
-      if (parsed.command === 'system' && (parsed.subcommand === 'help' || parsed.subcommand === 'status')) {
+      if (
+        parsed.command === 'system' &&
+        (parsed.subcommand === 'help' ||
+          parsed.subcommand === 'status' ||
+          parsed.subcommand === 'ping' ||
+          parsed.subcommand === 'time')
+      ) {
         return await handleSystem(ctx);
       }
       return [
@@ -228,6 +260,7 @@ export async function processIncomingMessage(
           9: { raw: '/chats', command: 'chats', args: [] },
           10: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
           11: { raw: '/reminders', command: 'remind', subcommand: 'list', args: [] },
+          12: { raw: '/schedule', command: 'schedule', args: [] },
         };
 
         if (menuMapping[num]) {
@@ -326,6 +359,8 @@ async function dispatchCommand(ctx: CommandContext): Promise<CommandResult> {
       return await handleSendFile(ctx);
     case 'remind':
       return await handleRemind(ctx);
+    case 'schedule':
+      return await handleSchedule(ctx);
     case 'config':
       return await handleConfig(ctx);
     case 'task':

@@ -1,0 +1,101 @@
+{
+  "title": "BSCS-6 (6A) — Fall 2026 Schedule",
+  "description": "Department of Computer Science • Section 6A",
+  "timezone": "Asia/Karachi",
+  "days": {
+    "monday": [
+      {
+        "start": "11:00 AM",
+        "end": "2:00 PM",
+        "subject": "Parallel & Distributed Computing Lab",
+        "room": "Computer Lab 3",
+        "type": "Lab"
+      },
+      {
+        "start": "2:00 PM",
+        "end": "4:00 PM",
+        "subject": "Computer Networks",
+        "room": "Classroom 11",
+        "type": "Theory"
+      }
+    ],
+    "tuesday": [
+      {
+        "start": "8:00 AM",
+        "end": "11:00 AM",
+        "subject": "Entrepreneurship (BSCGV-6 ke sath)",
+        "room": "Classroom 5",
+        "type": "Theory"
+      },
+      {
+        "start": "12:30 PM",
+        "end": "2:30 PM",
+        "subject": "Advance Database Management Systems",
+        "room": "Classroom 9",
+        "type": "Theory"
+      },
+      {
+        "start": "2:30 PM",
+        "end": "4:30 PM",
+        "subject": "Parallel & Distributed Computing",
+        "room": "Classroom 11",
+        "type": "Theory"
+      }
+    ],
+    "wednesday": [
+      {
+        "start": "8:00 AM",
+        "end": "10:00 AM",
+        "subject": "Artificial Intelligence (BSCGV-6, BSCGV-7 ke sath)",
+        "room": "Classroom 1",
+        "type": "Theory"
+      },
+      {
+        "start": "11:00 AM",
+        "end": "2:00 PM",
+        "subject": "Artificial Intelligence Lab (BSCGV-6, BSCGV-7 ke sath)",
+        "room": "Computer Lab 1",
+        "type": "Lab"
+      }
+    ],
+    "thursday": [
+      {
+        "start": "8:00 AM",
+        "end": "11:00 AM",
+        "subject": "Entrepreneurship Workshop (BSCGV-6 ke sath)",
+        "room": "Classroom 1",
+        "type": "Workshop"
+      },
+      {
+        "start": "11:00 AM",
+        "end": "2:00 PM",
+        "subject": "Computer Networks Lab",
+        "room": "Computer Lab 2",
+        "type": "Lab"
+      },
+      {
+        "start": "2:00 PM",
+        "end": "4:00 PM",
+        "subject": "AI Driven Software Development",
+        "room": "Classroom 1",
+        "type": "Theory"
+      }
+    ],
+    "friday": [
+      {
+        "start": "8:00 AM",
+        "end": "10:30 AM",
+        "subject": "Advance Database Management Systems Lab",
+        "room": "Computer Lab 4",
+        "type": "Lab"
+      },
+      {
+        "start": "2:00 PM",
+        "end": "5:00 PM",
+        "subject": "AI Driven Software Development Lab",
+        "room": "Computer Lab 1",
+        "type": "Lab"
+      }
+    ]
+  }
+}

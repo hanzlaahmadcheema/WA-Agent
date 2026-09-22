@@ -2,7 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { type proto, downloadMediaMessage } from '@whiskeysockets/baileys';
 import { processIncomingMessage } from '../router/command-router.js';
-import { authorizeUser, isSenderAdmin, registerAdminLid, getAllAuthorizedPhones, normalizeJid } from '../security/authorizer.js';
+import {
+  authorizeUser,
+  getOrCreateUser,
+  isSenderAdmin,
+  registerAdminLid,
+  getAllAuthorizedPhones,
+  normalizeJid,
+} from '../security/authorizer.js';
 import { trackInboundMessage } from '../database/repositories/message-dedup.repo.js';
 import { UnauthorizedError, RateLimitedError } from '../router/errors.js';
 import { LIMITS } from '../security/limits.js';
@@ -50,6 +57,44 @@ export function isSelfChat(jid?: string | null): boolean {
     selfIdentities.has(norm.user) ||
     selfIdentities.has(norm.phoneNumber)
   );
+}
+
+export function isPublicCommandText(text: string): boolean {
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+  // Reminders
+  if (
+    /^remind\b/i.test(trimmed) ||
+    /^\/remind\b/i.test(trimmed) ||
+    /^\/reminders\b/i.test(trimmed) ||
+    lower === 'reminders'
+  ) {
+    return true;
+  }
+  // Schedule / Timetable
+  if (
+    /^\/schedule\b/i.test(trimmed) ||
+    /^\/timetable\b/i.test(trimmed) ||
+    /^\/tt\b/i.test(trimmed) ||
+    /^\/classes\b/i.test(trimmed) ||
+    /^(schedule|timetable|tt|classes)\b/i.test(trimmed)
+  ) {
+    return true;
+  }
+  // System latency & server clock
+  if (
+    /^\/ping\b/i.test(trimmed) ||
+    lower === 'ping' ||
+    /^\/time\b/i.test(trimmed) ||
+    lower === 'time'
+  ) {
+    return true;
+  }
+  // Menu shortcuts for reminders (11) and schedule (12)
+  if (trimmed === '11' || trimmed === '12') {
+    return true;
+  }
+  return false;
 }
 
 export function extractMessageText(message: proto.IMessage | null | undefined): string | null {
@@ -120,20 +165,14 @@ export async function executeMessagePipeline(
     }
   }
 
-  // 4. Authorization Check BEFORE parsing or command routing
+  // 4. Sender Registration & Authorization Resolution
+  let userRecord: { user: any; isAuthorized: boolean };
   try {
-    authorizeUser(senderJid, pushName);
-  } catch (err) {
-    if (err instanceof UnauthorizedError) {
-      return {
-        shouldReply: true,
-        recipientJid: msg.key.remoteJid!,
-        replyText: '🛑 *Access Denied*: Unauthorized sender.',
-        isUnauthorized: true,
-      };
-    }
-    return { shouldReply: false, ignoredReason: 'Authorization check failed' };
+    userRecord = getOrCreateUser(senderJid, pushName);
+  } catch {
+    return { shouldReply: false, ignoredReason: 'User registration failed' };
   }
+  const isAuthorized = userRecord.isAuthorized;
 
   // 4. Message Deduplication Check
   const messageId = msg.key.id;
@@ -301,18 +340,26 @@ export async function executeMessagePipeline(
 
   const isFriendlyKeyword = [
     'menu', 'help', 'start', 'status', 'chats', 'chat',
-    'diff', 'push', 'jobs', 'cancel', 'stop', 'model', 'models', 'reminders'
+    'diff', 'push', 'jobs', 'cancel', 'stop', 'model', 'models', 'reminders',
+    'schedule', 'timetable', 'tt', 'classes', 'ping', 'time'
   ].includes(lower);
 
-  let isCommandOrSelection = trimmed.startsWith('/') || /^\d+$/.test(trimmed) || isFriendlyKeyword;
+  const isSchedulePrefix = /^(schedule|timetable|tt|classes)\b/i.test(trimmed);
+  const isRemindPrefix = /^remind\b/i.test(trimmed);
+
+  let isCommandOrSelection =
+    trimmed.startsWith('/') ||
+    /^\d+$/.test(trimmed) ||
+    isFriendlyKeyword ||
+    isSchedulePrefix ||
+    isRemindPrefix;
 
   // Natural Conversation Mode check:
   // If user is authorized, CLI session is active, and an active project + session exist:
-  if (!isCommandOrSelection) {
+  if (!isCommandOrSelection && isAuthorized) {
     try {
-      const authUser = authorizeUser(senderJid, pushName);
-      if (isCliActive(authUser.id)) {
-        const activeProj = getActiveProject(authUser.id);
+      if (isCliActive(userRecord.user.id)) {
+        const activeProj = getActiveProject(userRecord.user.id);
         if (activeProj) {
           const activeSess = getActiveSession(activeProj.id);
           if (activeSess) {
@@ -327,6 +374,16 @@ export async function executeMessagePipeline(
     return { shouldReply: false, ignoredReason: 'Non-command text' };
   }
 
+  // 5.6 Authorization Check: Enforce strictly for non-public commands
+  if (!isAuthorized && !isPublicCommandText(trimmed)) {
+    return {
+      shouldReply: true,
+      recipientJid: msg.key.remoteJid!,
+      replyText: '🛑 *Access Denied*: Unauthorized sender.',
+      isUnauthorized: true,
+    };
+  }
+
   // 6. Execute Command via Router
   const output = await processIncomingMessage(senderJid, trimmed, pushName);
   if (!output) {
@@ -335,11 +392,13 @@ export async function executeMessagePipeline(
 
   const replyText = typeof output === 'string' ? output : output.text;
   const media = typeof output === 'string' ? undefined : output.media;
+  const isDenied = replyText.includes('🛑 *Access Denied*');
 
   return {
     shouldReply: true,
     recipientJid: msg.key.remoteJid!,
     replyText,
     media,
+    isUnauthorized: isDenied ? true : undefined,
   };
 }

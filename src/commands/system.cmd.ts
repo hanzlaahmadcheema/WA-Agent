@@ -7,6 +7,27 @@ import { isCliActive } from '../state/cli-session.js';
 export async function handleSystem(ctx: CommandContext): Promise<string> {
   const { subcommand, args } = ctx.parsed;
 
+  if (subcommand === 'ping') {
+    const uptimeSec = Math.floor(process.uptime());
+    const hours = Math.floor(uptimeSec / 3600);
+    const mins = Math.floor((uptimeSec % 3600) / 60);
+    return `🏓 *Pong!*\n• *Status:* Online & Responsive\n• *Uptime:* ${hours}h ${mins}m\n• *Time:* ${new Date().toLocaleTimeString()}`;
+  }
+
+  if (subcommand === 'time') {
+    const now = new Date();
+    const dateStr = now.toLocaleString([], {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    return `🕒 *Current Local Time:*\n${dateStr}`;
+  }
+
   if (subcommand === 'status' || !subcommand) {
     return handleStatus(ctx);
   }

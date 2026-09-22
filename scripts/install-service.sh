@@ -166,6 +166,13 @@ if [ -f "${SOURCE_DIR}/src/database/schema.sql" ]; then
     cp -a "${SOURCE_DIR}/src/database/schema.sql" "${APP_DIR}/dist/database/schema.sql"
 fi
 
+if [ -f "${SOURCE_DIR}/data/timetable.json" ]; then
+    mkdir -p "${APP_DIR}/data" "${VAR_DIR}/data"
+    cp -a "${SOURCE_DIR}/data/timetable.json" "${APP_DIR}/data/timetable.json"
+    cp -a "${SOURCE_DIR}/data/timetable.json" "${VAR_DIR}/data/timetable.json"
+    chown wa-agent:wa-agent "${VAR_DIR}/data/timetable.json"
+fi
+
 if [ -d "${SOURCE_DIR}/node_modules" ]; then
     cp -a "${SOURCE_DIR}/node_modules" "${APP_DIR}/"
 fi

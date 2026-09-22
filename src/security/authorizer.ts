@@ -121,13 +121,16 @@ export function isSenderAdmin(senderJid: string): boolean {
   return false;
 }
 
-export function authorizeUser(senderJid: string, pushName?: string): User {
+export function getOrCreateUser(
+  senderJid: string,
+  pushName?: string
+): { user: User; isAuthorized: boolean } {
   const norm = normalizeJid(senderJid);
   const jid = norm.jid;
   const phoneNumber = norm.phoneNumber;
   const db = getDatabase();
 
-  const user = db
+  let user = db
     .prepare('SELECT * FROM users WHERE id = ?')
     .get(jid) as User | undefined;
 
@@ -135,24 +138,22 @@ export function authorizeUser(senderJid: string, pushName?: string): User {
   const now = Date.now();
 
   if (!user) {
-    // If sender is admin phone number or recognized admin LID, auto-whitelist
     const isAuthorized = isAdmin ? 1 : 0;
     db.prepare(`
       INSERT INTO users (id, phone_number, display_name, is_authorized, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(jid, phoneNumber, pushName || null, isAuthorized, now, now);
 
-    if (!isAuthorized) {
-      throw new UnauthorizedError();
-    }
-
     return {
-      id: jid,
-      phone_number: phoneNumber,
-      display_name: pushName || null,
-      is_authorized: 1,
-      created_at: now,
-      updated_at: now,
+      user: {
+        id: jid,
+        phone_number: phoneNumber,
+        display_name: pushName || null,
+        is_authorized: isAuthorized,
+        created_at: now,
+        updated_at: now,
+      },
+      isAuthorized: Boolean(isAuthorized),
     };
   }
 
@@ -161,12 +162,20 @@ export function authorizeUser(senderJid: string, pushName?: string): User {
       now,
       jid
     );
-    user.is_authorized = 1;
+    user = { ...user, is_authorized: 1, updated_at: now };
   }
 
-  if (!user.is_authorized) {
+  return {
+    user,
+    isAuthorized: Boolean(user.is_authorized),
+  };
+}
+
+export function authorizeUser(senderJid: string, pushName?: string): User {
+  const { user, isAuthorized } = getOrCreateUser(senderJid, pushName);
+  if (!isAuthorized) {
     throw new UnauthorizedError();
   }
-
   return user;
 }
+

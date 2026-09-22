@@ -77,6 +77,17 @@ export function parseCommand(input: string): ParsedCommand | null {
 
   if (!trimmed.startsWith('/')) {
     // Friendly plain-text keywords for non-technical users
+    const firstWord = trimmed.split(/\s+/)[0].toLowerCase();
+    if (['schedule', 'timetable', 'tt', 'classes'].includes(firstWord)) {
+      const allTokens = tokenizeArguments(trimmed);
+      return {
+        raw: `/${trimmed}`,
+        command: 'schedule',
+        args: allTokens.slice(1),
+        rawTrailing: trimmed.slice(firstWord.length).trim(),
+      };
+    }
+
     const lower = trimmed.toLowerCase();
     const friendlyKeywords: Record<string, ParsedCommand> = {
       menu: { raw: '/menu', command: 'menu', args: [] },
@@ -93,6 +104,12 @@ export function parseCommand(input: string): ParsedCommand | null {
       model: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
       models: { raw: '/model', command: 'config', subcommand: 'model', args: [] },
       reminders: { raw: '/reminders', command: 'remind', subcommand: 'list', args: [] },
+      schedule: { raw: '/schedule', command: 'schedule', args: [] },
+      timetable: { raw: '/timetable', command: 'schedule', args: [] },
+      tt: { raw: '/tt', command: 'schedule', args: [] },
+      classes: { raw: '/classes', command: 'schedule', args: [] },
+      ping: { raw: '/ping', command: 'system', subcommand: 'ping', args: [] },
+      time: { raw: '/time', command: 'system', subcommand: 'time', args: [] },
     };
     if (friendlyKeywords[lower]) {
       return friendlyKeywords[lower];
@@ -157,6 +174,15 @@ export function parseCommand(input: string): ParsedCommand | null {
     fix: { command: 'fix' },
     remind: { command: 'remind' },
     reminders: { command: 'remind', subcommand: 'list' },
+    schedule: { command: 'schedule' },
+    timetable: { command: 'schedule' },
+    tt: { command: 'schedule' },
+    classes: { command: 'schedule' },
+    class: { command: 'schedule' },
+    lectures: { command: 'schedule' },
+    lecture: { command: 'schedule' },
+    ping: { command: 'system', subcommand: 'ping' },
+    time: { command: 'system', subcommand: 'time' },
   };
 
   let command = firstToken;
@@ -211,6 +237,9 @@ export function parseCommand(input: string): ParsedCommand | null {
     }
   } else if (command === 'remind') {
     const match = trimmed.match(/^\/(?:remind|reminders?)\s+(.*)/i);
+    if (match) rawTrailing = match[1].trim();
+  } else if (command === 'schedule') {
+    const match = trimmed.match(/^\/(?:schedule|timetable|tt|classes?|lectures?)\s+(.*)/i);
     if (match) rawTrailing = match[1].trim();
   }
 
