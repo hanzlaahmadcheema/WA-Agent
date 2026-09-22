@@ -15,7 +15,8 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import { initDatabase, closeDatabase } from '../src/database/connection.js';
-import { ensureRemindersTable } from '../src/reminders/reminder-repo.js';
+import { ensureRemindersTable, listPendingReminders } from '../src/reminders/reminder-repo.js';
+import { parseDurationToMinutes } from '../src/commands/schedule.cmd.js';
 import {
   timeStringToMinutes,
   loadTimetable,
@@ -91,6 +92,18 @@ describe('University Timetable & Public Command System', () => {
     it('capitalizes strings properly', () => {
       assert.equal(capitalize('monday'), 'Monday');
       assert.equal(capitalize('friday'), 'Friday');
+    });
+
+    it('parses reminder duration strings to minutes', () => {
+      assert.equal(parseDurationToMinutes('15min'), 15);
+      assert.equal(parseDurationToMinutes('15m'), 15);
+      assert.equal(parseDurationToMinutes('15 min'), 15);
+      assert.equal(parseDurationToMinutes('30 mins'), 30);
+      assert.equal(parseDurationToMinutes('1h'), 60);
+      assert.equal(parseDurationToMinutes('1h 15m'), 75);
+      assert.equal(parseDurationToMinutes('10'), 10);
+      assert.equal(parseDurationToMinutes('15min before'), 15);
+      assert.equal(parseDurationToMinutes('invalid'), null);
     });
   });
 
@@ -295,6 +308,21 @@ describe('University Timetable & Public Command System', () => {
       assert.ok(typeof cls === 'string');
       assert.match(cls, /Friday Schedule/);
     });
+
+    it('schedules a reminder before next lecture with /schedule remind 15min', async () => {
+      const output = await processIncomingMessage(ADMIN_JID, '/schedule remind 15min');
+      assert.ok(typeof output === 'string');
+      assert.match(output, /Lecture Reminder Scheduled/);
+      assert.match(output, /15m before class/);
+      assert.match(output, /Room/);
+
+      // Verify stored in database
+      const pending = listPendingReminders(ADMIN_JID);
+      assert.ok(pending.length >= 1);
+      const lectureRem = pending.find((r) => r.message.includes('Upcoming Lecture Alert!'));
+      assert.ok(lectureRem);
+      assert.match(lectureRem.message, /Upcoming Lecture Alert/);
+    });
   });
 
   // ─── 6. Public Accessibility & Security Boundaries ───────────────────────────
@@ -362,6 +390,23 @@ describe('University Timetable & Public Command System', () => {
       assert.equal(res.isUnauthorized, undefined);
       assert.match(res.replyText!, /Reminder Scheduled/);
       assert.match(res.replyText!, /Check assignment deadline/);
+    });
+
+    it('allows stranger (unauthorized user) to set lecture reminder with /schedule remind 15min', async () => {
+      const remindMsg: proto.IWebMessageInfo = {
+        key: { id: 'STRANGER_SCHED_REMIND', remoteJid: STRANGER_JID, fromMe: false },
+        message: { conversation: '/schedule remind 15min' },
+      };
+      const res = await executeMessagePipeline(remindMsg);
+      assert.equal(res.shouldReply, true);
+      assert.equal(res.isUnauthorized, undefined);
+      assert.match(res.replyText!, /Lecture Reminder Scheduled/);
+      assert.match(res.replyText!, /15m before class/);
+
+      // Verify stored in database for stranger
+      const pending = listPendingReminders(STRANGER_JID);
+      const rem = pending.find((r) => r.message.includes('Upcoming Lecture Alert!'));
+      assert.ok(rem);
     });
 
     it('allows stranger (unauthorized user) to ping or query server time', async () => {

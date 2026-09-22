@@ -7,6 +7,7 @@ import type {
   ClassSession,
   ClassWithStatus,
   DayName,
+  NextLectureResult,
 } from './schedule-types.js';
 
 const DAY_NAMES_ORDER: DayName[] = [
@@ -236,13 +237,7 @@ export function getDaySchedule(
 /**
  * Finds the currently active class and the next upcoming class.
  */
-export function getNextLecture(now: Date = new Date()): {
-  current?: ClassWithStatus;
-  next?: ClassWithStatus;
-  day: DayName;
-  isToday: boolean;
-  title: string;
-} | null {
+export function getNextLecture(now: Date = new Date()): NextLectureResult | null {
   const timetable = loadTimetable();
   const todayName = getDayNameFromIndex(now.getDay());
   const todaySchedule = getDaySchedule(todayName, now);
@@ -250,35 +245,57 @@ export function getNextLecture(now: Date = new Date()): {
   const current = todaySchedule.classes.find((c) => c.status === 'ongoing');
   const nextToday = todaySchedule.classes.find((c) => c.status === 'upcoming');
 
-  if (current || nextToday) {
-    return {
-      current,
-      next: nextToday,
-      day: todayName,
-      isToday: true,
-      title: timetable.title,
-    };
+  let nextUpcoming: ClassWithStatus | undefined = nextToday;
+  let nextLectureDate: Date | undefined;
+  let nextDay: DayName = todayName;
+  let isNextToday = true;
+
+  if (nextToday) {
+    nextLectureDate = new Date(now);
+    nextLectureDate.setHours(
+      Math.floor(nextToday.startMinutes / 60),
+      nextToday.startMinutes % 60,
+      0,
+      0
+    );
+  } else {
+    // If no upcoming classes left today, find the first class on the next scheduled day
+    for (let offset = 1; offset <= 7; offset++) {
+      const candidateDate = new Date(now);
+      candidateDate.setDate(candidateDate.getDate() + offset);
+      const candidateDay = getDayNameFromIndex(candidateDate.getDay());
+      const rawClasses = timetable.days[candidateDay] || [];
+
+      if (rawClasses.length > 0) {
+        const parsed = rawClasses.map(parseClassSession).sort((a, b) => a.startMinutes - b.startMinutes);
+        const nextClass = parsed[0];
+        nextUpcoming = {
+          ...nextClass,
+          status: 'upcoming',
+        };
+        nextDay = candidateDay;
+        isNextToday = false;
+        nextLectureDate = new Date(candidateDate);
+        nextLectureDate.setHours(
+          Math.floor(nextClass.startMinutes / 60),
+          nextClass.startMinutes % 60,
+          0,
+          0
+        );
+        break;
+      }
+    }
   }
 
-  // If no more classes today, find the first class on the next scheduled day
-  for (let offset = 1; offset <= 7; offset++) {
-    const candidateDate = new Date(now);
-    candidateDate.setDate(candidateDate.getDate() + offset);
-    const candidateDay = getDayNameFromIndex(candidateDate.getDay());
-    const rawClasses = timetable.days[candidateDay] || [];
-
-    if (rawClasses.length > 0) {
-      const parsed = rawClasses.map(parseClassSession).sort((a, b) => a.startMinutes - b.startMinutes);
-      return {
-        next: {
-          ...parsed[0],
-          status: 'upcoming',
-        },
-        day: candidateDay,
-        isToday: false,
-        title: timetable.title,
-      };
-    }
+  if (current || nextUpcoming) {
+    return {
+      current,
+      next: nextUpcoming,
+      day: nextDay,
+      isToday: isNextToday,
+      title: timetable.title,
+      nextLectureDate,
+    };
   }
 
   return null;

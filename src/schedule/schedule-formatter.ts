@@ -1,4 +1,4 @@
-import type { ClassWithStatus, DayName } from './schedule-types.js';
+import type { ClassWithStatus, DayName, RawClassSession } from './schedule-types.js';
 
 export function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -14,7 +14,7 @@ export function formatMinutesDuration(totalMinutes: number): string {
   return `${minutes}m`;
 }
 
-function getClassEmoji(type?: string): string {
+export function getClassEmoji(type?: string): string {
   const lower = (type || '').toLowerCase();
   if (lower.includes('lab')) return '🧪';
   if (lower.includes('workshop')) return '🛠️';
@@ -255,4 +255,63 @@ export function formatFullWeekView(data: {
   lines.push('  `/schedule <day>`      • Check any specific day (e.g. `/schedule friday`)');
 
   return lines.join('\n');
+}
+
+/**
+ * Formats the notification text sent when the reminder fires on WhatsApp.
+ */
+export function formatLectureReminderAlert(
+  c: RawClassSession,
+  leadMinutes: number
+): string {
+  const emoji = getClassEmoji(c.type);
+  const typeBadge = c.type ? ` _(${c.type})_` : '';
+  const leadStr = formatMinutesDuration(leadMinutes);
+
+  return [
+    `🎓 *Upcoming Lecture Alert!* (Starts in ${leadStr})`,
+    '',
+    `${emoji} *${c.subject}*${typeBadge}`,
+    `⏰ *Time:* ${c.start} – ${c.end}`,
+    `🏛️ *Room:* ${c.room}`,
+    `⏳ *Starts in:* ${leadStr}`,
+  ].join('\n');
+}
+
+/**
+ * Formats the immediate confirmation message when a lecture reminder is scheduled.
+ */
+export function formatLectureReminderConfirmation(
+  c: RawClassSession,
+  fireAt: Date,
+  leadMinutes: number,
+  dayLabel: string,
+  reminderId: number
+): string {
+  const emoji = getClassEmoji(c.type);
+  const typeBadge = c.type ? ` _(${c.type})_` : '';
+  const leadStr = formatMinutesDuration(leadMinutes);
+
+  const timeFormatted = fireAt.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const dateFormatted = fireAt.toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  return [
+    '✅ *Lecture Reminder Scheduled!*',
+    '',
+    `${emoji} *${c.subject}*${typeBadge}`,
+    `🏛️ *Room:* ${c.room}`,
+    `⏰ *Class Time:* ${dayLabel} at *${c.start}*`,
+    `🔔 *Alert Time:* ${dateFormatted} at *${timeFormatted}* _(${leadStr} before class)_`,
+    '',
+    `💡 _Type_ \`/reminders\` _to view active alerts •_ \`/remind cancel ${reminderId}\` _to remove._`,
+  ].join('\n');
 }

@@ -28,3 +28,12 @@ export interface TimetableConfig {
 }
 
 export type DayName = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface NextLectureResult {
+  current?: ClassWithStatus;
+  next?: ClassWithStatus;
+  day: DayName;
+  isToday: boolean;
+  title: string;
+  nextLectureDate?: Date;
+}
